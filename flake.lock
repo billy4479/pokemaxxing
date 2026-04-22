@@ -34,10 +34,34 @@
         "type": "github"
       }
     },
+    "pokemon-showdown": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1776855999,
+        "narHash": "sha256-iuBNo/rV3b2dFu4tVkc809Ja9erM1czQcMwkMovPsEk=",
+        "ref": "refs/heads/master",
+        "rev": "15a3457ee556ee91e2532a37ff871a2ba5018215",
+        "revCount": 28664,
+        "type": "git",
+        "url": "file:../../src/Pokemon-Showdown"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:../../src/Pokemon-Showdown"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "pokemon-showdown": "pokemon-showdown"
       }
     },
     "systems": {
