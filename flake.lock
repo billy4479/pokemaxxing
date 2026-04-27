@@ -44,11 +44,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1776855999,
-        "narHash": "sha256-iuBNo/rV3b2dFu4tVkc809Ja9erM1czQcMwkMovPsEk=",
+        "lastModified": 1777288221,
+        "narHash": "sha256-JSYqgfN2orKaBlCTqIMj3OTu4Jjz6o5Oek3jqauXad0=",
         "ref": "refs/heads/master",
-        "rev": "15a3457ee556ee91e2532a37ff871a2ba5018215",
-        "revCount": 28664,
+        "rev": "ae94a61d92a46e8368c64bd65efeb6800e4f1a30",
+        "revCount": 28665,
         "type": "git",
         "url": "file:../../src/Pokemon-Showdown"
       },
