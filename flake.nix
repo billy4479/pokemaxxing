@@ -29,6 +29,11 @@
             numpy
             pandas
             matplotlib
+            torch
+            tqdm
+            playwright
+            umap-learn
+            scikit-learn
 
             jupyterlab
 
