@@ -50,11 +50,11 @@
         "rev": "ae94a61d92a46e8368c64bd65efeb6800e4f1a30",
         "revCount": 28665,
         "type": "git",
-        "url": "file:../../src/Pokemon-Showdown"
+        "url": "file:../Pokemon-Showdown"
       },
       "original": {
         "type": "git",
-        "url": "file:../../src/Pokemon-Showdown"
+        "url": "file:../Pokemon-Showdown"
       }
     },
     "root": {

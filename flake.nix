@@ -3,7 +3,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     pokemon-showdown = {
-      url = "git+file:../../src/Pokemon-Showdown";
+      url = "git+file:../Pokemon-Showdown";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";
@@ -34,6 +34,7 @@
             playwright
             umap-learn
             scikit-learn
+            plotly
 
             jupyterlab
 

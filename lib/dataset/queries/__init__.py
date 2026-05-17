@@ -9,10 +9,11 @@ from .effects import (
     build_effects_table_full,
     build_removed_effects_table,
 )
-from .moves import build_moves_table
+from .moves import build_moves_table, build_moves_table_full
 
 __all__ = [
     "build_moves_table",
+    "build_moves_table_full",
     "build_effects_table",
     "build_effects_table_full",
     "build_removed_effects_table",

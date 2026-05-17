@@ -283,15 +283,17 @@ def build_moves_table(data_dir: str = "csv") -> pd.DataFrame:
         "min_turns",
         "max_turns",
         "expected_hits",
+        "flags",
+        "name",
+        "generation_id",
+        "target_id",
+        "meta_category_id",
+        "meta_ailment_id",
     ]
-    drop_columns.extend(
-        col
-        for col in table.columns
-        if ("contest" in col) or col.startswith("meta_") or col.startswith("flag")
-    )
+    drop_columns.extend(col for col in table.columns if ("contest" in col))
     table = table.drop(columns=[col for col in drop_columns if col in table.columns])
 
     deprecated_move_ids = set(infer_deprecated_moves(data_dir=data_dir)["move_id"])
     table = table[~table["move_id"].isin(deprecated_move_ids)].copy()
 
-    return table
+    return table.reset_index(drop=True)
