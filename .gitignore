@@ -1,6 +1,7 @@
 /.direnv
 
 *.csv
+*.pt
 __pycache__
 __marimo__
 
