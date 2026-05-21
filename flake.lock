@@ -20,11 +20,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1774709303,
-        "narHash": "sha256-D3Q07BbIA2KnTcSXIqqu9P586uWxN74zNoCH3h2ESHg=",
+        "lastModified": 1778869304,
+        "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8110df5ad7abf5d4c0f6fb0f8f978390e77f9685",
+        "rev": "d233902339c02a9c334e7e593de68855ad26c4cb",
         "type": "github"
       },
       "original": {
@@ -44,17 +44,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1777288221,
-        "narHash": "sha256-JSYqgfN2orKaBlCTqIMj3OTu4Jjz6o5Oek3jqauXad0=",
+        "lastModified": 1779383253,
+        "narHash": "sha256-Yub4HXcXOM/zUTPTNXmb35N5bueCaqQElkiXqCEEmV4=",
         "ref": "refs/heads/master",
-        "rev": "ae94a61d92a46e8368c64bd65efeb6800e4f1a30",
-        "revCount": 28665,
+        "rev": "e9a9d093a41038faf667a135b1675d1aed490c66",
+        "revCount": 3,
         "type": "git",
-        "url": "file:../Pokemon-Showdown"
+        "url": "file:../pokemon-showdown-wrapper"
       },
       "original": {
         "type": "git",
-        "url": "file:../Pokemon-Showdown"
+        "url": "file:../pokemon-showdown-wrapper"
       }
     },
     "root": {
