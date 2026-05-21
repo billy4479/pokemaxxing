@@ -182,16 +182,30 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
             )
         )
 
-    if "user's type changes to match the target's" in text or "user becomes the target's type" in text:
-        add_component(_new_component(RulePayload(rule="user_type_matches_target"), target="self"))
+    if (
+        "user's type changes to match the target's" in text
+        or "user becomes the target's type" in text
+    ):
+        add_component(
+            _new_component(RulePayload(rule="user_type_matches_target"), target="self")
+        )
 
-    if "exchanges the user's speed with the target's" in text or "exchanges the original speed stats of the user and target" in text:
-        add_component(_new_component(RulePayload(rule="swap_user_target_speed"), target="both"))
+    if (
+        "exchanges the user's speed with the target's" in text
+        or "exchanges the original speed stats of the user and target" in text
+    ):
+        add_component(
+            _new_component(RulePayload(rule="swap_user_target_speed"), target="both")
+        )
 
     if "inflicts 40 points of damage" in text:
-        add_component(_new_component(RulePayload(rule="fixed_damage_40"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="fixed_damage_40"), target="opponent")
+        )
     if "inflicts 20 points of damage" in text:
-        add_component(_new_component(RulePayload(rule="fixed_damage_20"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="fixed_damage_20"), target="opponent")
+        )
 
     scaling_rules = [
         (
@@ -313,7 +327,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
             _new_component(StatStagePayload(stat="attack", delta=1), target="self")
         )
         add_component(
-            _new_component(StatStagePayload(stat="special_attack", delta=1), target="self")
+            _new_component(
+                StatStagePayload(stat="special_attack", delta=1), target="self"
+            )
         )
 
     if "raises the user's attack and defense by one stage" in text:
@@ -326,17 +342,23 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
 
     if "raises the user's special attack and special defense by one stage" in text:
         add_component(
-            _new_component(StatStagePayload(stat="special_attack", delta=1), target="self")
+            _new_component(
+                StatStagePayload(stat="special_attack", delta=1), target="self"
+            )
         )
         add_component(
-            _new_component(StatStagePayload(stat="special_defense", delta=1), target="self")
+            _new_component(
+                StatStagePayload(stat="special_defense", delta=1), target="self"
+            )
         )
 
     if "raises the user's attack and speed by one stage" in text:
         add_component(
             _new_component(StatStagePayload(stat="attack", delta=1), target="self")
         )
-        add_component(_new_component(StatStagePayload(stat="speed", delta=1), target="self"))
+        add_component(
+            _new_component(StatStagePayload(stat="speed", delta=1), target="self")
+        )
 
     if "raises the user's attack and accuracy by one stage" in text:
         add_component(
@@ -356,7 +378,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
             _new_component(StatStagePayload(stat="attack", delta=-1), target="opponent")
         )
         add_component(
-            _new_component(StatStagePayload(stat="defense", delta=-1), target="opponent")
+            _new_component(
+                StatStagePayload(stat="defense", delta=-1), target="opponent"
+            )
         )
 
     if "lowers the target's attack and special attack by one stage" in text:
@@ -380,7 +404,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
                 target="opponent",
             )
         )
-        add_component(_new_component(StatStagePayload(stat="speed", delta=-1), target="opponent"))
+        add_component(
+            _new_component(StatStagePayload(stat="speed", delta=-1), target="opponent")
+        )
 
     if (
         "raises user's attack, special attack, and speed by two stages" in text
@@ -390,9 +416,13 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
             _new_component(StatStagePayload(stat="attack", delta=2), target="self")
         )
         add_component(
-            _new_component(StatStagePayload(stat="special_attack", delta=2), target="self")
+            _new_component(
+                StatStagePayload(stat="special_attack", delta=2), target="self"
+            )
         )
-        add_component(_new_component(StatStagePayload(stat="speed", delta=2), target="self"))
+        add_component(
+            _new_component(StatStagePayload(stat="speed", delta=2), target="self")
+        )
 
     if "lower user's defense and special defense by one stage" in text:
         add_component(
@@ -411,22 +441,35 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
 
     if "lowers opponents' speed by one stage upon switching in" in text:
-        add_component(_new_component(StatStagePayload(stat="speed", delta=-1), target="opponent"))
+        add_component(
+            _new_component(StatStagePayload(stat="speed", delta=-1), target="opponent")
+        )
 
     if "raises a selected ally's special defense by one stage" in text:
         add_component(
-            _new_component(StatStagePayload(stat="special_defense", delta=1), target="self")
+            _new_component(
+                StatStagePayload(stat="special_defense", delta=1), target="self"
+            )
         )
 
     if "raises the attack and special attack of all grass pokemon in battle" in text:
-        add_component(_new_component(StatStagePayload(stat="attack", delta=1), target="all"))
         add_component(
-            _new_component(StatStagePayload(stat="special_attack", delta=1), target="all")
+            _new_component(StatStagePayload(stat="attack", delta=1), target="all")
+        )
+        add_component(
+            _new_component(
+                StatStagePayload(stat="special_attack", delta=1), target="all"
+            )
         )
 
-    if "raises the user's special attack, special defense, and speed by one stage each" in text:
+    if (
+        "raises the user's special attack, special defense, and speed by one stage each"
+        in text
+    ):
         add_component(
-            _new_component(StatStagePayload(stat="special_attack", delta=1), target="self")
+            _new_component(
+                StatStagePayload(stat="special_attack", delta=1), target="self"
+            )
         )
         add_component(
             _new_component(
@@ -434,7 +477,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
                 target="self",
             )
         )
-        add_component(_new_component(StatStagePayload(stat="speed", delta=1), target="self"))
+        add_component(
+            _new_component(StatStagePayload(stat="speed", delta=1), target="self")
+        )
 
     if "raises the user's attack, defense, and accuracy by one stage each" in text:
         add_component(
@@ -498,16 +543,26 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
             _new_component(HealPayload(ratio=0.5, base="max_hp"), target="self")
         )
     if "completely healing itself" in text:
-        add_component(_new_component(HealPayload(ratio=1.0, base="max_hp"), target="self"))
+        add_component(
+            _new_component(HealPayload(ratio=1.0, base="max_hp"), target="self")
+        )
     if "heals the target for half its max hp" in text:
         add_component(
             _new_component(HealPayload(ratio=0.5, base="max_hp"), target="opponent")
         )
     if "restores 1/16 of the user's max hp each turn" in text:
-        add_component(_new_component(HealPayload(ratio=1 / 16, base="max_hp"), target="self"))
+        add_component(
+            _new_component(HealPayload(ratio=1 / 16, base="max_hp"), target="self")
+        )
     if "target loses 1/4 its max hp every turn as long as it's asleep" in text:
-        add_component(_new_component(RecoilPayload(ratio=0.25, base="max_hp"), target="opponent"))
-        add_component(_new_component(RulePayload(rule="sleep_required_for_dot"), target="opponent"))
+        add_component(
+            _new_component(RecoilPayload(ratio=0.25, base="max_hp"), target="opponent")
+        )
+        add_component(
+            _new_component(
+                RulePayload(rule="sleep_required_for_dot"), target="opponent"
+            )
+        )
     if "seeds the target, stealing hp from it every turn" in text:
         add_component(_new_component(RulePayload(rule="leech_seed"), target="opponent"))
     if "drains half the damage inflicted to heal the user" in text:
@@ -593,15 +648,24 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "for five turns" in text:
         add_component(
-            _new_component(TurnPatternPayload(active_turns_min=5, active_turns_max=5), target="field")
+            _new_component(
+                TurnPatternPayload(active_turns_min=5, active_turns_max=5),
+                target="field",
+            )
         )
     if "for three turns" in text:
         add_component(
-            _new_component(TurnPatternPayload(active_turns_min=3, active_turns_max=3), target="field")
+            _new_component(
+                TurnPatternPayload(active_turns_min=3, active_turns_max=3),
+                target="field",
+            )
         )
     if "for the next few turns" in text:
         add_component(
-            _new_component(TurnPatternPayload(active_turns_min=2, active_turns_max=5), target="field")
+            _new_component(
+                TurnPatternPayload(active_turns_min=2, active_turns_max=5),
+                target="field",
+            )
         )
     if "requires a turn to charge before attacking" in text:
         add_component(_new_component(TurnPatternPayload(charge_turns=1), target="self"))
@@ -630,7 +694,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
             _new_component(CritRulePayload(rule="always_crit"), target="self")
         )
     if "guarantees a critical hit with the user's next move" in text:
-        add_component(_new_component(CritRulePayload(rule="always_crit"), target="self"))
+        add_component(
+            _new_component(CritRulePayload(rule="always_crit"), target="self")
+        )
 
     # Trap/switch/item families.
     if "prevents the target from fleeing" in text:
@@ -656,12 +722,19 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "ends wild battles" in text or "immediately ends wild battles" in text:
         add_component(_new_component(SwitchPayload(rule="flee_wild"), target="self"))
-    if "allows the trainer to switch out the user and pass effects along to its replacement" in text:
+    if (
+        "allows the trainer to switch out the user and pass effects along to its replacement"
+        in text
+    ):
         add_component(
-            _new_component(SwitchPayload(rule="switch_self_pass_effects"), target="self")
+            _new_component(
+                SwitchPayload(rule="switch_self_pass_effects"), target="self"
+            )
         )
     if "user switches places with the friendly pokemon opposite it" in text:
-        add_component(_new_component(SwitchPayload(rule="switch_with_ally"), target="self"))
+        add_component(
+            _new_component(SwitchPayload(rule="switch_with_ally"), target="self")
+        )
 
     if "takes the target's item" in text:
         add_component(
@@ -685,7 +758,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "gives the user's held item to the target" in text:
         add_component(
-            _new_component(ItemInteractionPayload(rule="give_item_to_target"), target="opponent")
+            _new_component(
+                ItemInteractionPayload(rule="give_item_to_target"), target="opponent"
+            )
         )
     if "user recovers the item it last used up" in text:
         add_component(
@@ -696,7 +771,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "target cannot use held items" in text:
         add_component(
-            _new_component(ItemInteractionPayload(rule="disable_target_items"), target="opponent")
+            _new_component(
+                ItemInteractionPayload(rule="disable_target_items"), target="opponent"
+            )
         )
     if "negates held items for five turns" in text:
         add_component(
@@ -731,7 +808,10 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
                 ProtectionInteractionPayload(rule="break_screens"), target="opponent"
             )
         )
-    if "prevents any multi-target moves from hitting friendly pokemon this turn" in text:
+    if (
+        "prevents any multi-target moves from hitting friendly pokemon this turn"
+        in text
+    ):
         add_component(
             _new_component(
                 ProtectionInteractionPayload(rule="ally_wide_guard"),
@@ -775,7 +855,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "uses the target's last used move" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="copy_target_last_move"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="copy_target_last_move"), target="opponent"
+            )
         )
     if "randomly selects and uses any move in the game" in text:
         add_component(
@@ -791,11 +873,19 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
                 target="self",
             )
         )
-    if "inflicts twice the damage the user received from the last physical hit it took" in text:
+    if (
+        "inflicts twice the damage the user received from the last physical hit it took"
+        in text
+    ):
         add_component(
-            _new_component(TargetingRulePayload(rule="counter_physical"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="counter_physical"), target="opponent"
+            )
         )
-    if "inflicts twice the damage the user received from the last special hit it took" in text:
+    if (
+        "inflicts twice the damage the user received from the last special hit it took"
+        in text
+    ):
         add_component(
             _new_component(
                 TargetingRulePayload(rule="mirror_coat_special_counter"),
@@ -811,11 +901,15 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "copies the target's ability" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="copy_target_ability"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="copy_target_ability"), target="opponent"
+            )
         )
     if "discards the user's stat changes and copies the target's" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="copy_target_stat_changes"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="copy_target_stat_changes"), target="opponent"
+            )
         )
     if "copies the user's ability onto the target" in text:
         add_component(
@@ -847,11 +941,15 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "forces the target to repeat its last used move every turn" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="repeat_target_last_move"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="repeat_target_last_move"), target="opponent"
+            )
         )
     if "disables the target's last used move" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="disable_target_last_move"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="disable_target_last_move"), target="opponent"
+            )
         )
     if "prevents the target from using the same move twice in a row" in text:
         add_component(
@@ -876,11 +974,15 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "for five turns, slower pokemon will act before faster pokemon" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="switch_turn_order"), target="field")
+            _new_component(
+                TargetingRulePayload(rule="switch_turn_order"), target="field"
+            )
         )
     if "prevents target from restoring its hp for five turns" in text:
         add_component(
-            _new_component(TargetingRulePayload(rule="target_cannot_restore_hp"), target="opponent")
+            _new_component(
+                TargetingRulePayload(rule="target_cannot_restore_hp"), target="opponent"
+            )
         )
     if "inflicts damage based on the target's defense, not special defense" in text:
         add_component(
@@ -897,7 +999,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "nullifies target's ability until it leaves battle" in text:
         add_component(
-            _new_component(AbilityInteractionPayload(rule="ignores_abilities"), target="opponent")
+            _new_component(
+                AbilityInteractionPayload(rule="ignores_abilities"), target="opponent"
+            )
         )
     if "user and target swap abilities" in text:
         add_component(_new_component(RulePayload(rule="swap_abilities"), target="both"))
@@ -915,7 +1019,9 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
         )
     if "cleanses the user of a burn, paralysis, or poison" in text:
         add_component(
-            _new_component(StatusCurePayload(rule="cure_self_major_status"), target="self")
+            _new_component(
+                StatusCurePayload(rule="cure_self_major_status"), target="self"
+            )
         )
     if "cannot lower the target's hp below 1" in text:
         add_component(
@@ -931,105 +1037,239 @@ def parse_effect_row(row: pd.Series | dict[str, object]) -> EffectClass:
 
     # Generic field rules for common weather/terrain/screen effects.
     if "resets all pokemon's stats, accuracy, and evasion" in text:
-        add_component(_new_component(RulePayload(rule="reset_all_stat_modifiers"), target="all"))
+        add_component(
+            _new_component(RulePayload(rule="reset_all_stat_modifiers"), target="all")
+        )
     if "user waits for two turns, then hits back for twice the damage it took" in text:
-        add_component(_new_component(RulePayload(rule="bide_counter"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="bide_counter"), target="opponent")
+        )
     if "transfers 1/4 of the user's max hp into a doll" in text:
         add_component(_new_component(RulePayload(rule="substitute"), target="self"))
-        add_component(_new_component(RecoilPayload(ratio=0.25, base="max_hp"), target="self"))
+        add_component(
+            _new_component(RecoilPayload(ratio=0.25, base="max_hp"), target="self")
+        )
     if "sets the user's and targets's hp to the average of their current hp" in text:
-        add_component(_new_component(RulePayload(rule="set_both_hp_to_average"), target="both"))
+        add_component(
+            _new_component(RulePayload(rule="set_both_hp_to_average"), target="both")
+        )
     if "lowers the pp of the target's last used move by 4" in text:
-        add_component(_new_component(RulePayload(rule="lower_target_last_move_pp_4"), target="opponent"))
+        add_component(
+            _new_component(
+                RulePayload(rule="lower_target_last_move_pp_4"), target="opponent"
+            )
+        )
     if "prevents the user's hp from lowering below 1 this turn" in text:
         add_component(_new_component(RulePayload(rule="endure"), target="self"))
     if "target falls in love if it has the opposite gender" in text:
-        add_component(_new_component(RulePayload(rule="infatuation"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="infatuation"), target="opponent")
+        )
     if "hits once for every conscious pokemon the trainer has" in text:
-        add_component(_new_component(RulePayload(rule="hits_per_healthy_party_member"), target="opponent"))
+        add_component(
+            _new_component(
+                RulePayload(rule="hits_per_healthy_party_member"), target="opponent"
+            )
+        )
     if "recovers 1/4 hp after one stockpile" in text:
-        add_component(_new_component(RulePayload(rule="swallow_heal_scales_with_stockpile"), target="self"))
+        add_component(
+            _new_component(
+                RulePayload(rule="swallow_heal_scales_with_stockpile"), target="self"
+            )
+        )
     if "uses a move which depends upon the terrain" in text:
-        add_component(_new_component(RulePayload(rule="terrain_dependent_move"), target="opponent"))
+        add_component(
+            _new_component(
+                RulePayload(rule="terrain_dependent_move"), target="opponent"
+            )
+        )
     if "for the next few turns, the target can only use damaging moves" in text:
-        add_component(_new_component(RulePayload(rule="target_can_only_use_damaging_moves"), target="opponent"))
+        add_component(
+            _new_component(
+                RulePayload(rule="target_can_only_use_damaging_moves"),
+                target="opponent",
+            )
+        )
     if "ally's next move inflicts half more damage" in text:
-        add_component(_new_component(RulePayload(rule="boost_ally_next_move"), target="self"))
+        add_component(
+            _new_component(RulePayload(rule="boost_ally_next_move"), target="self")
+        )
     if "randomly selects and uses one of the trainer's other pokemon's moves" in text:
-        add_component(_new_component(RulePayload(rule="random_move_from_party"), target="self"))
+        add_component(
+            _new_component(RulePayload(rule="random_move_from_party"), target="self")
+        )
     if "prevents the user from leaving battle" in text:
         add_component(_new_component(TrapPayload(rule="prevent_escape"), target="self"))
     if "reflects back the first effect move used on the user this turn" in text:
-        add_component(_new_component(RulePayload(rule="reflect_first_status_move"), target="self"))
+        add_component(
+            _new_component(RulePayload(rule="reflect_first_status_move"), target="self")
+        )
     if "lowers the target's hp to equal the user's" in text:
-        add_component(_new_component(RulePayload(rule="set_target_hp_to_user_hp"), target="opponent"))
+        add_component(
+            _new_component(
+                RulePayload(rule="set_target_hp_to_user_hp"), target="opponent"
+            )
+        )
     if "prevents the target from using any moves that the user also knows" in text:
-        add_component(_new_component(RulePayload(rule="imprison_shared_moves"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="imprison_shared_moves"), target="opponent")
+        )
     if "halves all electric-type damage" in text:
-        add_component(_new_component(RulePayload(rule="halve_electric_damage"), target="field"))
+        add_component(
+            _new_component(RulePayload(rule="halve_electric_damage"), target="field")
+        )
     if "halves all fire-type damage" in text:
-        add_component(_new_component(RulePayload(rule="halve_fire_damage"), target="field"))
+        add_component(
+            _new_component(RulePayload(rule="halve_fire_damage"), target="field")
+        )
     if "user's type changes to match the terrain" in text:
-        add_component(_new_component(RulePayload(rule="user_type_matches_terrain"), target="self"))
+        add_component(
+            _new_component(RulePayload(rule="user_type_matches_terrain"), target="self")
+        )
     if "allows it to be hit by psychic moves even if it's dark" in text:
-        add_component(_new_component(RulePayload(rule="dark_hit_by_psychic"), target="opponent"))
-    if "strikes back at the last pokemon to hit the user this turn with 1.5× the damage" in text:
-        add_component(_new_component(RulePayload(rule="metal_burst_counter"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="dark_hit_by_psychic"), target="opponent")
+        )
+    if (
+        "strikes back at the last pokemon to hit the user this turn with 1.5× the damage"
+        in text
+    ):
+        add_component(
+            _new_component(RulePayload(rule="metal_burst_counter"), target="opponent")
+        )
     if "user swaps attack and defense" in text:
-        add_component(_new_component(RulePayload(rule="swap_user_attack_defense"), target="self"))
+        add_component(
+            _new_component(RulePayload(rule="swap_user_attack_defense"), target="self")
+        )
     if "user swaps attack and special attack changes with the target" in text:
-        add_component(_new_component(RulePayload(rule="swap_atk_spatk_stage_changes"), target="both"))
+        add_component(
+            _new_component(
+                RulePayload(rule="swap_atk_spatk_stage_changes"), target="both"
+            )
+        )
     if "user swaps defense and special defense changes with the target" in text:
-        add_component(_new_component(RulePayload(rule="swap_def_spdef_stage_changes"), target="both"))
+        add_component(
+            _new_component(
+                RulePayload(rule="swap_def_spdef_stage_changes"), target="both"
+            )
+        )
     if "averages defense and special defense with the target" in text:
-        add_component(_new_component(RulePayload(rule="average_def_spdef"), target="both"))
+        add_component(
+            _new_component(RulePayload(rule="average_def_spdef"), target="both")
+        )
     if "averages attack and special attack with the target" in text:
-        add_component(_new_component(RulePayload(rule="average_atk_spatk"), target="both"))
+        add_component(
+            _new_component(RulePayload(rule="average_atk_spatk"), target="both")
+        )
     if "changes the target's type to water" in text:
-        add_component(_new_component(RulePayload(rule="target_type_to_water"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="target_type_to_water"), target="opponent")
+        )
     if "makes the target act next this turn" in text:
-        add_component(_new_component(RulePayload(rule="target_moves_next"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="target_moves_next"), target="opponent")
+        )
     if "makes the target act last this turn" in text:
-        add_component(_new_component(RulePayload(rule="target_moves_last"), target="opponent"))
-    if "raises the attack and special attack of all" in text and "pokemon in battle" in text:
-        add_component(_new_component(StatStagePayload(stat="attack", delta=1), target="all"))
-        add_component(_new_component(StatStagePayload(stat="special_attack", delta=1), target="all"))
-    if "covers the opposing field, lowering opponents' speed by one stage upon switching in" in text:
-        add_component(_new_component(StatStagePayload(stat="speed", delta=-1), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="target_moves_last"), target="opponent")
+        )
+    if (
+        "raises the attack and special attack of all" in text
+        and "pokemon in battle" in text
+    ):
+        add_component(
+            _new_component(StatStagePayload(stat="attack", delta=1), target="all")
+        )
+        add_component(
+            _new_component(
+                StatStagePayload(stat="special_attack", delta=1), target="all"
+            )
+        )
+    if (
+        "covers the opposing field, lowering opponents' speed by one stage upon switching in"
+        in text
+    ):
+        add_component(
+            _new_component(StatStagePayload(stat="speed", delta=-1), target="opponent")
+        )
     if "protects pokemon on the ground from priority moves" in text:
-        add_component(_new_component(ProtectionInteractionPayload(rule="ally_quick_guard"), target="self"))
+        add_component(
+            _new_component(
+                ProtectionInteractionPayload(rule="ally_quick_guard"), target="self"
+            )
+        )
     if "increases the power of their psychic moves by 50%" in text:
-        add_component(_new_component(RulePayload(rule="psychic_terrain_power_boost"), target="field"))
+        add_component(
+            _new_component(
+                RulePayload(rule="psychic_terrain_power_boost"), target="field"
+            )
+        )
     if "reduces damage five turns, but must be used during hail" in text:
-        add_component(_new_component(RulePayload(rule="aurora_veil_hail_required"), target="field"))
+        add_component(
+            _new_component(
+                RulePayload(rule="aurora_veil_hail_required"), target="field"
+            )
+        )
     if "changes the weather to rain for five turns" in text:
-        add_component(_new_component(RulePayload(rule="weather_rain_5_turns"), target="field"))
+        add_component(
+            _new_component(RulePayload(rule="weather_rain_5_turns"), target="field")
+        )
     if "changes the weather to sunny for five turns" in text:
-        add_component(_new_component(RulePayload(rule="weather_sun_5_turns"), target="field"))
+        add_component(
+            _new_component(RulePayload(rule="weather_sun_5_turns"), target="field")
+        )
     if "changes the weather to a sandstorm for five turns" in text:
-        add_component(_new_component(RulePayload(rule="weather_sandstorm_5_turns"), target="field"))
+        add_component(
+            _new_component(
+                RulePayload(rule="weather_sandstorm_5_turns"), target="field"
+            )
+        )
     if "changes the weather to a hailstorm for five turns" in text:
-        add_component(_new_component(RulePayload(rule="weather_hail_5_turns"), target="field"))
+        add_component(
+            _new_component(RulePayload(rule="weather_hail_5_turns"), target="field")
+        )
     if "reduces damage from special attacks by 50% for five turns" in text:
-        add_component(_new_component(RulePayload(rule="special_damage_halved_5_turns"), target="field"))
+        add_component(
+            _new_component(
+                RulePayload(rule="special_damage_halved_5_turns"), target="field"
+            )
+        )
     if "reduces damage from physical attacks by half" in text:
-        add_component(_new_component(RulePayload(rule="physical_damage_halved_5_turns"), target="field"))
+        add_component(
+            _new_component(
+                RulePayload(rule="physical_damage_halved_5_turns"), target="field"
+            )
+        )
     if "scatters spikes, hurting opposing pokemon that switch in" in text:
-        add_component(_new_component(RulePayload(rule="entry_hazard_spikes"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="entry_hazard_spikes"), target="opponent")
+        )
     if "scatters poisoned spikes, poisoning opposing pokemon that switch in" in text:
-        add_component(_new_component(RulePayload(rule="entry_hazard_toxic_spikes"), target="opponent"))
+        add_component(
+            _new_component(
+                RulePayload(rule="entry_hazard_toxic_spikes"), target="opponent"
+            )
+        )
     if "causes damage when opposing pokemon switch in" in text:
-        add_component(_new_component(RulePayload(rule="entry_hazard_rocks"), target="opponent"))
+        add_component(
+            _new_component(RulePayload(rule="entry_hazard_rocks"), target="opponent")
+        )
     if "does nothing" in text:
         add_component(_new_component(RulePayload(rule="no_effect"), target="self"))
 
     # Fallbacks for effects with missing prose in this dataset.
     if not text and 776 in move_ids:
         add_component(_new_component(DamagePayload(mode="regular"), target="opponent"))
-        add_component(_new_component(RulePayload(rule="damage_uses_user_defense_stat"), target="self"))
+        add_component(
+            _new_component(
+                RulePayload(rule="damage_uses_user_defense_stat"), target="self"
+            )
+        )
 
     if not text and 791 in move_ids:
-        add_component(_new_component(HealPayload(ratio=0.25, base="max_hp"), target="all"))
+        add_component(
+            _new_component(HealPayload(ratio=0.25, base="max_hp"), target="all")
+        )
 
     # Fallback.
     if not components:

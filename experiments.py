@@ -466,7 +466,7 @@ def _(MoveAutoencoder, ae_loss, device):
         epochs: int,
         loss_weights,
         learning_rate: float = 1e-4,
-        use_cache = False,
+        use_cache=False,
     ):
         batch_size = 128
         cache_path = "move_autoencoder.pt"
@@ -488,7 +488,7 @@ def _(MoveAutoencoder, ae_loss, device):
         ).to(device)
 
         using_cache = False
-    
+
         if use_cache and Path(cache_path).exists():
             model.load_state_dict(torch.load(cache_path, weights_only=True))
             using_cache = True
@@ -498,17 +498,17 @@ def _(MoveAutoencoder, ae_loss, device):
                 lr=learning_rate,
                 weight_decay=5e-3,
             )
-    
+
             history_rows = []
             epoch_progress = tqdm(
                 range(1, epochs + 1),
                 desc="Training AE",
                 unit="epoch",
             )
-    
+
             for epoch in epoch_progress:
                 model.train()
-    
+
                 epoch_totals = {
                     "loss": 0.0,
                     "recon_numeric": 0.0,
@@ -516,29 +516,29 @@ def _(MoveAutoencoder, ae_loss, device):
                     "recon_categorical": 0.0,
                     "recon_flags": 0.0,
                 }
-    
+
                 for (batch,) in dataloader:
                     batch = batch.to(device)
-    
+
                     optimizer.zero_grad()
-    
+
                     reconstruction_logits_batch, latent_batch = model(batch)
-    
+
                     loss, loss_parts = ae_loss(
                         reconstruction_logits_batch,
                         batch,
                         weights=loss_weights,
                     )
-    
+
                     loss.backward()
                     optimizer.step()
-    
+
                     batch_count = batch.shape[0]
-    
+
                     epoch_totals["loss"] += loss.item() * batch_count
                     for loss_name, loss_value in loss_parts.items():
                         epoch_totals[loss_name] += loss_value.item() * batch_count
-    
+
                 history_row = {
                     "epoch": epoch,
                     **{
@@ -546,9 +546,9 @@ def _(MoveAutoencoder, ae_loss, device):
                         for key, value in epoch_totals.items()
                     },
                 }
-    
+
                 history_rows.append(history_row)
-    
+
                 epoch_progress.set_postfix(
                     loss=f"{history_row['loss']:.4f}",
                     num=f"{history_row['recon_numeric']:.4f}",
@@ -588,7 +588,11 @@ def _(feature_df, group_loss_weights, train):
         reconstruction_logits_matrix,
         training_history,
     ) = train(
-        feature_df, latent_dim=8, epochs=512 * 2, loss_weights=group_loss_weights, use_cache=True,
+        feature_df,
+        latent_dim=8,
+        epochs=512 * 2,
+        loss_weights=group_loss_weights,
+        use_cache=True,
     )
 
     if training_history is not None:
@@ -602,20 +606,23 @@ def _(feature_df, group_loss_weights, train):
 def _(device, training_history):
     if training_history is not None:
         final_training_row = training_history.iloc[-1]
-    
+
         training_summary = {
             "device": str(device),
             "epochs": int(training_history["epoch"].max()),
             "final_loss": float(final_training_row["loss"]),
             "best_loss": float(training_history["loss"].min()),
             "final_recon_numeric": float(final_training_row["recon_numeric"]),
-            "final_recon_stat_change": float(final_training_row["recon_stat_change"]),
-            "final_recon_categorical": float(final_training_row["recon_categorical"]),
+            "final_recon_stat_change": float(
+                final_training_row["recon_stat_change"]
+            ),
+            "final_recon_categorical": float(
+                final_training_row["recon_categorical"]
+            ),
             "final_recon_flags": float(final_training_row["recon_flags"]),
         }
 
         training_summary
-
     return
 
 
@@ -623,50 +630,62 @@ def _(device, training_history):
 def _(training_history):
     if training_history is not None:
         _fig, _ax = plt.subplots()
-    
+
         _ax.plot(
             training_history["epoch"],
             training_history["loss"],
             label="total",
             linewidth=2.5,
         )
-    
+
         _ax.plot(
             training_history["epoch"],
             training_history["recon_numeric"],
             label="numeric",
             linewidth=1.5,
         )
-    
+
         _ax.plot(
             training_history["epoch"],
             training_history["recon_stat_change"],
             label="stat_change",
             linewidth=1.5,
         )
-    
+
         _ax.plot(
             training_history["epoch"],
             training_history["recon_categorical"],
             label="categorical",
             linewidth=1.5,
         )
-    
+
         _ax.plot(
             training_history["epoch"],
             training_history["recon_flags"],
             label="flags",
             linewidth=1.5,
         )
-    
+
         _fig.suptitle("Training Progress")
         _ax.set_xlabel("Epoch")
         _ax.set_ylabel("Loss")
         _ax.grid(alpha=0.25)
         _ax.legend()
-    
+
         _fig.tight_layout()
         _fig
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### On the choice of hyperparameters
+
+    - The learning rate was made low and the number of epochs high as we don't care if the autoencoder overfits or if the training takes longer, we just want the best result with the least possible number of dimensions in the latent space.
+    - Flags used to have a worse reconstruction than other parameters, so I bumped their loss weight so that the model would optimize for them more aggressively.
+    - I experimented a lot with the dimension of the latent space. It seems like a higher number of dimensions may help when the number of epochs is low, however with enough training the reconstruction is fine even with as little as 8 dimensions. Lower than 8 we start losing some structure, but I will comment on this again later in the clustering section.
+    """)
     return
 
 
@@ -903,20 +922,49 @@ def _(
 @app.cell
 def _(reconstruction_summary):
     _plot_df = reconstruction_summary.copy()
-    _plot_df["label"] = _plot_df["group"] + "\n" + _plot_df["metric"]
 
-    _fig, _ax = plt.subplots(figsize=(12, 5))
+    _direction_map = {
+        "mae_scaled": "lower is better",
+        "rmse_scaled": "lower is better",
+        "mae": "lower is better",
+        "rmse": "lower is better",
+        "mean_accuracy": "higher is better",
+        "macro_f1": "higher is better",
+        "micro_f1": "higher is better",
+    }
 
-    _ax.bar(
-        _plot_df["label"],
-        _plot_df["value"],
+    _groups = _plot_df["group"].unique()
+
+    _fig, _axes = plt.subplots(
+        1, len(_groups), figsize=(5 * len(_groups), 4), sharey=False
     )
 
-    _ax.set_title("Reconstruction Evaluation Summary")
-    _ax.set_ylabel("Metric value")
-    _ax.tick_params(axis="x", rotation=45)
-    _ax.grid(axis="y", alpha=0.25)
+    for _ax, _group in zip(_axes, _groups):
+        _group_df = _plot_df[_plot_df["group"] == _group]
+        _labels = _group_df["metric"].values
+        _values = _group_df["value"].values
+        _direction = _direction_map[_labels[0]]
 
+        _bars = _ax.bar(_labels, _values)
+        _ax.set_title(_group)
+        _ax.tick_params(axis="x", rotation=20)
+        _ax.grid(axis="y", alpha=0.25)
+
+        _ymin, _ymax = _ax.get_ylim()
+        _y_range = _ymax - _ymin
+        _ax.set_ylim(_ymin - 0.05 * _y_range, _ymax + 0.05 * _y_range)
+
+        for _bar, _val in zip(_bars, _values):
+            _ax.text(
+                _bar.get_x() + _bar.get_width() / 2,
+                _bar.get_height(),
+                f"{_val:.4f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    _fig.suptitle("Reconstruction Evaluation Summary")
     _fig.tight_layout()
     _fig
     return
@@ -991,17 +1039,6 @@ def _(flags_eval_by_column):
 
     _fig.tight_layout()
     _fig
-    return
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    A comment on the choice of hyperparameters:
-    - The learning rate was made low and the number of epochs high as we don't care if the autoencoder overfits or if the training takes longer, we just want the best result with the least possible number of dimensions in the latent space.
-    - Flags used to have a worse reconstruction than other parameters, so I bumped their loss weight so that the model would optimize for them more aggressively.
-    - I experimented a lot with the dimension of the latent space. It seems like a higher number of dimensions may help when the number of epochs is low, however with enough training the reconstruction is fine even with as little as 8 dimensions. Lower than 8 we start losing some structure, but I will comment on this again later in the clustering section.
-    """)
     return
 
 
@@ -1226,6 +1263,7 @@ def _():
     Not all clusters are equally good: some are a bit vague or contain moves which cannot be discriminated further without reading the effect (which my AE is not doing).
 
     I noted that KMeans tends to like creating a LOT of clusters, by allowing a higher number of maximum clusters I found that setting k=100 or more gives a higher silohuette score, but then clusters don't give much information about the moves themselves and tend to be too specialized.
+    A more correct number of clusters seems to be identified by OPTICS, which however is unable to classify a good number of moves identifying them as noise.
 
     A note again on the dimension of the latent space: a dimension lower than 8 seem not to give good clusters, probably too much information got lost, while a dimension higher did not improve the tactical meaning of clusters any further.
     This aspect could be studied further.
@@ -1248,6 +1286,14 @@ def _(embedding_matrix, metadata_cols, moves_df):
     )
 
     move_embeddings_df
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    # Evolution
+    """)
     return
 
 

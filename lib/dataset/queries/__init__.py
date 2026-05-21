@@ -1,5 +1,6 @@
 """Query modules for Pokemon dataset analysis."""
 
+from .abilities import build_abilities_table, build_abilities_table_full
 from .deprecated_moves import has_explicit_move_deprecation_flag, infer_deprecated_moves
 from .effects import (
     build_effect_classes,
@@ -12,6 +13,8 @@ from .effects import (
 from .moves import build_moves_table, build_moves_table_full
 
 __all__ = [
+    "build_abilities_table",
+    "build_abilities_table_full",
     "build_moves_table",
     "build_moves_table_full",
     "build_effects_table",

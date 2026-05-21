@@ -199,7 +199,9 @@ class AbilityInteractionPayload:
 
 @dataclass(frozen=True)
 class StatusCurePayload:
-    rule: Literal["cure_party_major_status", "cure_self_freeze", "cure_self_major_status"]
+    rule: Literal[
+        "cure_party_major_status", "cure_self_freeze", "cure_self_major_status"
+    ]
 
 
 @dataclass(frozen=True)

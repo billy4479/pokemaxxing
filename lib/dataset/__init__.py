@@ -1,5 +1,6 @@
 """Dataset query library for Pokemon CSV files."""
 
+from .queries.abilities import build_abilities_table
 from .queries.deprecated_moves import (
     has_explicit_move_deprecation_flag,
     infer_deprecated_moves,
@@ -15,6 +16,7 @@ from .queries.effects import (
 from .queries.moves import build_moves_table
 
 __all__ = [
+    "build_abilities_table",
     "build_moves_table",
     "build_effects_table",
     "build_effects_table_full",
