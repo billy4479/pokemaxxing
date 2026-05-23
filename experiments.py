@@ -6,6 +6,7 @@ app = marimo.App(width="full")
 with app.setup:
     from functools import lru_cache
     from pathlib import Path
+    from dataclasses import dataclass
 
     import marimo as mo
     import matplotlib.pyplot as plt
@@ -42,12 +43,15 @@ def _():
 def _():
     seed = 42
 
+    np.random.seed(seed)
+    rng = np.random.default_rng(seed + 1)
+
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return device, seed
+    return device, rng, seed
 
 
 @app.cell(hide_code=True)
@@ -1833,7 +1837,7 @@ def _():
     )
 
 
-@app.function
+@app.function(hide_code=True)
 def compute_boost_score(boost: int) -> float:
     stage = max(-6, min(6, boost))
 
@@ -1900,6 +1904,13 @@ def _(
     return (compute_input_to_mlp,)
 
 
+@app.function
+def mlp_forward_pass(inputs: np.ndarray, weights: np.ndarray) -> int:
+    print(inputs.shape)
+
+    return 0
+
+
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
@@ -1909,12 +1920,121 @@ def _():
 
 
 @app.cell
+def _():
+    STAT_MIN = 30
+    STAT_MAX = {
+        "hp": 250,
+        "atk": 190,
+        "def": 250,
+        "spa": 190,
+        "spd": 250,
+        "spe": 200,
+    }
+    STATS_TOTAL_MAX = 600
+
+
+    def validate_stats(stats: sdw.Stats) -> bool:
+        return (
+            all(value <= STAT_MAX[key] for key, value in stats.items())
+            and sum(stats.values()) <= STATS_TOTAL_MAX
+            and all(value >= STAT_MIN for value in stats.values())
+        )
+
+
+    def random_valid_stats() -> sdw.Stats:
+        stats = {k: STAT_MIN for k in STAT_MAX}
+        remaining = STATS_TOTAL_MAX - sum(stats.values())  # 600 - 180 = 420
+
+        while remaining > 0:
+            keys = list(STAT_MAX.keys())
+            np.random.shuffle(keys)
+
+            for k in keys:
+                if STAT_MAX[k] - stats[k] < 1:
+                    continue
+                if remaining == 0:
+                    break
+
+                add = np.random.randint(1, min(remaining, STAT_MAX[k] - stats[k])+1)
+                stats[k] += add
+                remaining -= add
+
+        return stats
+
+    return (random_valid_stats,)
+
+
+@app.cell
+def _(metadata_cols, move_embeddings_df, moves_df, random_valid_stats, rng):
+    @dataclass
+    class Agent:
+        layers: list[tuple[np.ndarray, np.ndarray]]
+        stats: sdw.Stats
+        moves: list[str]
+        types: tuple[str, str]
+
+        @classmethod
+        def random_init(cls, layer_sizes: list[int]) -> "Agent":
+            params = []
+
+            for fan_in, fan_out in zip(layer_sizes[:-1], layer_sizes[1:]):
+                # He normal initialization
+                std = np.sqrt(2.0 / fan_in)
+
+                W = rng.normal(loc=0.0, scale=std, size=(fan_in, fan_out))
+
+                b = np.zeros((1, fan_out))
+
+                params.append((W, b))
+
+            stats = random_valid_stats()
+
+            all_types = moves_df["type"].unique()
+            types = (
+                all_types[rng.integers(len(all_types))],
+                all_types[rng.integers(len(all_types))]
+            )
+
+            moves = []
+            moves.append(
+                move_embeddings_df.iloc[rng.integers(len(move_embeddings_df))]
+                .drop(metadata_cols)
+                .to_numpy(dtype=np.float32)
+            )
+
+            return cls(params, stats, moves, types)
+
+        def count_mlp_params(self) -> int:
+            total = 0
+            for layer in self.layers:
+                total += (
+                    layer[0].shape[0] * layer[0].shape[1]
+                    + layer[1].shape[0] * layer[1].shape[1]
+                )
+
+            return total
+
+        def get_decision_function(self) -> sdw.MoveSelector:
+            def decider(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
+                print(self.moves)
+                return 0, 0
+
+            return decider
+
+    return (Agent,)
+
+
+@app.cell
+def _(Agent):
+    Agent.random_init([90, 32, 16, 4]).get_decision_function()(None, None)
+    return
+
+
+@app.cell
 def _(compute_input_to_mlp, seed):
-    from showdown_wrapper import BattleConfig, PlayerState, ShowdownPool
+    def first_move_ai(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
+        mlp_input = compute_input_to_mlp(p0, p1)
 
-
-    def first_move_ai(p0: PlayerState, p1: PlayerState) -> tuple[int, int]:
-        print(compute_input_to_mlp(p0, p1).shape)
         return (0, 0)
 
 
@@ -1933,25 +2053,25 @@ def _(compute_input_to_mlp, seed):
     }
 
     configs = [
-        BattleConfig(
+        sdw.BattleConfig(
             ai=ai,
             opponent={"type": "hardcoded", "species": "Garchomp"},
             move_selector=first_move_ai,
             seed=seed,
         ),
-        BattleConfig(
+        sdw.BattleConfig(
             ai=ai,
             opponent={"type": "hardcoded"},
             move_selector=first_move_ai,
             seed=seed,
         ),
-        BattleConfig(
+        sdw.BattleConfig(
             ai=ai,
             opponent={"type": "random"},
             move_selector=first_move_ai,
             seed=seed,
         ),
-        BattleConfig(
+        sdw.BattleConfig(
             ai=ai,
             opponent={"type": "random"},
             move_selector=first_move_ai,
@@ -1959,7 +2079,7 @@ def _(compute_input_to_mlp, seed):
         ),
     ]
 
-    with ShowdownPool(max_size=1) as pool:
+    with sdw.ShowdownPool(max_size=1) as pool:
         results = pool.run_battles(configs)
 
     for i, r in enumerate(results):
