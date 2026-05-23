@@ -3,7 +3,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     pokemon-showdown = {
-      url = "git+file:../Pokemon-Showdown";
+      url = "github:billy4479/pokemon-showdown-wrapper";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";
@@ -22,7 +22,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        modelEval = pokemon-showdown.packages.${system}.pokemon-showdown-model-eval;
+        showdown-wrapper = pokemon-showdown.packages.${system}.default;
 
         pyPkgs = pkgs.python3.withPackages (
           python-pkgs: with python-pkgs; [
@@ -43,7 +43,8 @@
 
             python-lsp-server
             python-lsp-ruff
-            modelEval
+
+            showdown-wrapper
           ]
         );
       in

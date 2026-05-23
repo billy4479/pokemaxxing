@@ -4,15 +4,18 @@ __generated_with = "0.21.1"
 app = marimo.App(width="full")
 
 with app.setup:
+    from functools import lru_cache
+    from pathlib import Path
+
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
+    import showdown_wrapper as sdw
     import torch
     from sklearn.cluster import KMeans
     from sklearn.decomposition import PCA
     from sklearn.metrics import precision_recall_fscore_support, silhouette_score
-    from sklearn.neighbors import NearestNeighbors
     from sklearn.preprocessing import StandardScaler
     from torch import nn
     from torch.nn import functional as F
@@ -21,7 +24,6 @@ with app.setup:
     from umap import UMAP
 
     from lib.dataset.queries import build_moves_table
-    from pathlib import Path
 
 
 @app.cell
@@ -68,7 +70,6 @@ def _():
         - Special Attach (SPA)
         - Special Defense (SPD)
         - Speed (SPE)
-    - An ability within the existing ones;
     - 2 types within the existing ones (which can be the same).
 
     Most importantly, to evaluate the fitness of each agent they will need to fight against other pokémons, so I will evolve a small MLP which will choose what to do in the fight (I will refer to it as the "battle MLP").
@@ -80,13 +81,63 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
+    ### Technical notes
+
     Luckily, since pokémon is a very famous franchise, a lot of great tools already exist.
 
     - I used the [PokéAPI](https://github.com/PokeAPI/pokeapi/) dataset as the main dataset for this project. This dataset is licensed under the [BSD-3-Clause License](https://github.com/PokeAPI/pokeapi/blob/master/LICENSE.md).
-    - Another dataset I used was the [Pokémon Database](https://pokemondb.net/sun-moon/zmoves), expecially for Z-Moves.
-    - The battle logic is implemented by the awesome [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) library licensed under the [MIT License](https://github.com/smogon/pokemon-showdown). I had to wrap this library in a special NodeJS+Python harness in order to facilitate the use with this project.
+    - The battle logic is implemented by the awesome [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) library, licensed under the [MIT License](https://github.com/smogon/pokemon-showdown).
 
-    While most of the code for this project is written by me, I was assisted by AI, expecially in the prototyping phase.
+    Pokémon Showdown is the most complete implementation of Pokémon battles, however it is written in TypeScript.
+    To use it in this project I wrote a "worker" interface to the library with the logic I need which can be controlled by piping commands through stdio.
+    Then I wrote a Python program which manages a pool of these NodeJS worker processes so that the decision making on which move to play is delegated to the Python code.
+    In this way I can execute multiple battles in parallel while still controlling everything thorugh Python.
+    The code for the worker and the wrapper lives in [this repository](https://github.com/billy4479/pokemon-showdown-wrapper).
+
+    While most of the code for this project is written by me, I was assisted by AI, expecially in the prototyping phase and in the parts which were not completely relevant to the evolutionary model part of the project.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Limitations
+
+    The game of Pokémon is very complex and some parts are very much RNG based. Because of time and hardware constraints I added some rules which simplify the battle, not all of these rules are very realistic but otherwise the MLP would have had to be much bigger and the training would have been much longer.
+
+    To be precise, the battle rules that the Showdown runner is using are the following:
+    ```ts
+    export const customRules = [
+        "Picked Team Size = 1",
+        "Max Team Size = 1",
+        "Min Team Size = 1",
+
+        "Terastal Clause",
+        "Dynamax Clause",
+        "Z-Move Clause",
+        "CFZ Clause",
+
+        "-Dragon Ascent",
+        "-pokemontag:allitems",
+
+        "OHKO Clause",
+        "Evasion Clause",
+        // "Accuracy Moves Clause",
+        "Sleep Moves Clause",
+        "Freeze Clause Mod",
+        "Moody Clause",
+        "Swagger Clause",
+
+        "Endless Battle Clause",
+        "Exact HP Mod",
+
+        "-All Abilities",
+        "+No Ability",
+    ].join(",");
+    ```
+
+    These limit the amout of moves each pokomon can learn and makes the battle simpler.
     """)
     return
 
@@ -125,6 +176,15 @@ def _():
 @app.cell
 def _():
     moves_df = build_moves_table().drop(columns=["effect"])
+    moves_df["move_identifier"] = moves_df["move_identifier"].map(
+        lambda x: x.replace("-", "")
+    )
+
+    _sd_moves = set(sdw.list_allowed_moves())
+    _pokeapi_moves = set(moves_df["move_identifier"])
+    _intersection = list(_sd_moves.intersection(_pokeapi_moves))
+
+    moves_df = moves_df[moves_df["move_identifier"].isin(_intersection)]
     moves_df
     return (moves_df,)
 
@@ -302,6 +362,9 @@ def _():
     This choice was made so that the battle MLP
     (which will be also very tiny since I won't be able to train it with gradient descent)
     doesn't need much "effort" to decode what a move actually does.
+
+    I'm not interesed in the model generalizing, it is fine if it overfits since the moves it will have to encode are always the same,
+    however I decided to include a `Dropout`: this will make the decode "dumber" which should match the battle MLP which will indeed will also be not very smart.
     """)
     return
 
@@ -309,7 +372,7 @@ def _():
 @app.cell
 def _(categorical_feature_groups, feature_groups, group_loss_weights):
     class MoveAutoencoder(nn.Module):
-        def __init__(self, input_dim, latent_dim=16, hidden_dims=(256, 128)):
+        def __init__(self, input_dim, latent_dim, hidden_dims=(256, 128)):
             super().__init__()
 
             self.encoder = nn.Sequential(
@@ -322,6 +385,7 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             )
 
             self.decoder = nn.Sequential(
+                nn.Dropout(p=0.1),
                 nn.Linear(latent_dim, hidden_dims[1]),
                 nn.SiLU(),
                 nn.Linear(hidden_dims[1], hidden_dims[0]),
@@ -590,24 +654,25 @@ def _(feature_df, group_loss_weights, train):
     ) = train(
         feature_df,
         latent_dim=8,
-        epochs=512 * 2,
+        epochs=2**10,
         loss_weights=group_loss_weights,
         use_cache=True,
     )
 
-    if training_history is not None:
-        training_history.tail(10)
-    else:
+    if training_history is None:
         print("Weights loaded from cache.")
     return embedding_matrix, reconstruction_logits_matrix, training_history
 
 
 @app.cell
 def _(device, training_history):
-    if training_history is not None:
+    def get_training_summary():
+        if training_history is None:
+            return None
+
         final_training_row = training_history.iloc[-1]
 
-        training_summary = {
+        return {
             "device": str(device),
             "epochs": int(training_history["epoch"].max()),
             "final_loss": float(final_training_row["loss"]),
@@ -622,58 +687,65 @@ def _(device, training_history):
             "final_recon_flags": float(final_training_row["recon_flags"]),
         }
 
-        training_summary
+
+    get_training_summary()
     return
 
 
 @app.cell
 def _(training_history):
-    if training_history is not None:
-        _fig, _ax = plt.subplots()
+    def plot_training():
+        if training_history is None:
+            return
 
-        _ax.plot(
+        fig, ax = plt.subplots()
+
+        ax.plot(
             training_history["epoch"],
             training_history["loss"],
             label="total",
             linewidth=2.5,
         )
 
-        _ax.plot(
+        ax.plot(
             training_history["epoch"],
             training_history["recon_numeric"],
             label="numeric",
             linewidth=1.5,
         )
 
-        _ax.plot(
+        ax.plot(
             training_history["epoch"],
             training_history["recon_stat_change"],
             label="stat_change",
             linewidth=1.5,
         )
 
-        _ax.plot(
+        ax.plot(
             training_history["epoch"],
             training_history["recon_categorical"],
             label="categorical",
             linewidth=1.5,
         )
 
-        _ax.plot(
+        ax.plot(
             training_history["epoch"],
             training_history["recon_flags"],
             label="flags",
             linewidth=1.5,
         )
 
-        _fig.suptitle("Training Progress")
-        _ax.set_xlabel("Epoch")
-        _ax.set_ylabel("Loss")
-        _ax.grid(alpha=0.25)
-        _ax.legend()
+        fig.suptitle("Training Progress")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.grid(alpha=0.25)
+        ax.legend()
 
-        _fig.tight_layout()
-        _fig
+        fig.tight_layout()
+        return fig
+
+
+    plot_training()
     return
 
 
@@ -1158,7 +1230,7 @@ def _(seed):
 
 @app.cell
 def _(best_kmeans_silhouette, embedding_matrix, pca, umap):
-    kmeans_labels, k = best_kmeans_silhouette(embedding_matrix, max_k=48)
+    kmeans_labels, k = best_kmeans_silhouette(embedding_matrix, max_k=64)
     plot_umap_pca_2d(
         umap,
         pca,
@@ -1179,7 +1251,6 @@ def _(compute_umap_pca, embedding_matrix):
 @app.function
 def plot_embedding_3d(embedding_3, labels, title: str):
     import plotly.graph_objects as go
-    import plotly.express as px
 
     df = pd.DataFrame(
         {
@@ -1286,14 +1357,616 @@ def _(embedding_matrix, metadata_cols, moves_df):
     )
 
     move_embeddings_df
-    return
+    return (move_embeddings_df,)
 
 
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
     # Evolution
+
+    ## Fitness
+
+    The fitness will be computed using this formula
+    $$
+    \begin{align*}
+    \text{fitness for 1 battle} = &\, 3000 \cdot \mathbb I(\text{battle won}) \\
+    & + 100 \cdot \text{own remaining HP} \\
+    & - 100 \cdot \text{opponent remaining HP} \\
+    & - 50  \cdot \text{number of turns}
+    \end{align*}
+    $$
+    where $\mathbb I$ is the indicator function.
+
+    The model will battle against various opponents with various degrees of difficulty.
+    The total fitness will be the sum of the fitness scores of each battle.
+
+    ## Battle MLP
+
+    This is the model which will take a decision on which move to play.
+
+    ### Inputs and Preprocessing
+
+    | **What** |  **Size** | **Notes** |
+    | -------- | -------- | --------- |
+    | Moveset (own)| $4 \times 8$ dense vector | Vectors from the latent space of the AE |
+    | Current PP (own) | $4$ integers | |
+    | Move effectiveness score (own) | $4$ dense vector | The $\log_2$ of the multiplier due to the types of the pokemons and the moves |
+    | Statistics (own) | $8$ integers | Boosts already applied, includes max HP |
+    | Current HP (both) | $2$ integers | |
+    | Weather and Terrain | $4 \times 2$ one-hot | |
+    | Major status (both) | $7 \times 2$ one-hot | |
+    | Volatile status (both) | $4 \times 2$ dense vectors | Precomputed approximation of what each status does |
+    | Side conditions (both) | $3 \times 2$ dense vectors | Precomputed approximation of what each side condition does |
+    | Turn number | $1$ integer | |
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    @lru_cache()
+    def _map_type_to_score(
+        own_type_0: str,
+        own_type_1: str | None,
+        opp_type_0: str,
+        opp_type_1: str | None,
+        move_type: str,
+    ) -> float:
+        IMMUNITY_SCORE = -4.0
+
+        type_chart: dict[str, dict[str, float]] = {
+            "normal": {
+                "rock": 0.5,
+                "ghost": 0.0,
+                "steel": 0.5,
+            },
+            "fire": {
+                "fire": 0.5,
+                "water": 0.5,
+                "grass": 2.0,
+                "ice": 2.0,
+                "bug": 2.0,
+                "rock": 0.5,
+                "dragon": 0.5,
+                "steel": 2.0,
+            },
+            "water": {
+                "fire": 2.0,
+                "water": 0.5,
+                "grass": 0.5,
+                "ground": 2.0,
+                "rock": 2.0,
+                "dragon": 0.5,
+            },
+            "electric": {
+                "water": 2.0,
+                "electric": 0.5,
+                "grass": 0.5,
+                "ground": 0.0,
+                "flying": 2.0,
+                "dragon": 0.5,
+            },
+            "grass": {
+                "fire": 0.5,
+                "water": 2.0,
+                "grass": 0.5,
+                "poison": 0.5,
+                "ground": 2.0,
+                "flying": 0.5,
+                "bug": 0.5,
+                "rock": 2.0,
+                "dragon": 0.5,
+                "steel": 0.5,
+            },
+            "ice": {
+                "fire": 0.5,
+                "water": 0.5,
+                "grass": 2.0,
+                "ice": 0.5,
+                "ground": 2.0,
+                "flying": 2.0,
+                "dragon": 2.0,
+                "steel": 0.5,
+            },
+            "fighting": {
+                "normal": 2.0,
+                "ice": 2.0,
+                "poison": 0.5,
+                "flying": 0.5,
+                "psychic": 0.5,
+                "bug": 0.5,
+                "rock": 2.0,
+                "ghost": 0.0,
+                "dark": 2.0,
+                "steel": 2.0,
+                "fairy": 0.5,
+            },
+            "poison": {
+                "grass": 2.0,
+                "poison": 0.5,
+                "ground": 0.5,
+                "rock": 0.5,
+                "ghost": 0.5,
+                "steel": 0.0,
+                "fairy": 2.0,
+            },
+            "ground": {
+                "fire": 2.0,
+                "electric": 2.0,
+                "grass": 0.5,
+                "poison": 2.0,
+                "flying": 0.0,
+                "bug": 0.5,
+                "rock": 2.0,
+                "steel": 2.0,
+            },
+            "flying": {
+                "electric": 0.5,
+                "grass": 2.0,
+                "fighting": 2.0,
+                "bug": 2.0,
+                "rock": 0.5,
+                "steel": 0.5,
+            },
+            "psychic": {
+                "fighting": 2.0,
+                "poison": 2.0,
+                "psychic": 0.5,
+                "dark": 0.0,
+                "steel": 0.5,
+            },
+            "bug": {
+                "fire": 0.5,
+                "grass": 2.0,
+                "fighting": 0.5,
+                "poison": 0.5,
+                "flying": 0.5,
+                "psychic": 2.0,
+                "ghost": 0.5,
+                "dark": 2.0,
+                "steel": 0.5,
+                "fairy": 0.5,
+            },
+            "rock": {
+                "fire": 2.0,
+                "ice": 2.0,
+                "fighting": 0.5,
+                "ground": 0.5,
+                "flying": 2.0,
+                "bug": 2.0,
+                "steel": 0.5,
+            },
+            "ghost": {
+                "normal": 0.0,
+                "psychic": 2.0,
+                "ghost": 2.0,
+                "dark": 0.5,
+            },
+            "dragon": {
+                "dragon": 2.0,
+                "steel": 0.5,
+                "fairy": 0.0,
+            },
+            "dark": {
+                "fighting": 0.5,
+                "psychic": 2.0,
+                "ghost": 2.0,
+                "dark": 0.5,
+                "fairy": 0.5,
+            },
+            "steel": {
+                "fire": 0.5,
+                "water": 0.5,
+                "electric": 0.5,
+                "ice": 2.0,
+                "rock": 2.0,
+                "steel": 0.5,
+                "fairy": 2.0,
+            },
+            "fairy": {
+                "fire": 0.5,
+                "fighting": 2.0,
+                "poison": 0.5,
+                "dragon": 2.0,
+                "dark": 2.0,
+                "steel": 0.5,
+            },
+        }
+
+        own_types = {t for t in [own_type_0, own_type_1] if t is not None}
+        opp_types = {t for t in [opp_type_0, opp_type_1] if t is not None}
+
+        stab = 1.5 if move_type in own_types else 1.0
+
+        effectiveness = 1.0
+        for defending_type in opp_types:
+            effectiveness *= type_chart.get(move_type, {}).get(defending_type, 1.0)
+
+        multiplier = stab * effectiveness
+
+        if multiplier == 0.0:
+            return IMMUNITY_SCORE
+
+        return np.log2(multiplier)
+
+
+    def map_type_to_score(
+        own_type: list[str],
+        opp_type: list[str],
+        move_type: str,
+    ):
+        assert len(own_type) > 0
+        assert len(opp_type) > 0
+
+        return _map_type_to_score(
+            own_type[0],
+            own_type[1] if len(own_type) > 1 else None,
+            opp_type[0],
+            opp_type[1] if len(opp_type) > 1 else None,
+            move_type,
+        )
+
+    return (map_type_to_score,)
+
+
+@app.cell(hide_code=True)
+def _():
+    def _combine_independent_probabilities(probabilities: np.ndarray) -> float:
+        if probabilities.size == 0:
+            return 0.0
+
+        probabilities = np.clip(probabilities, 0.0, 1.0)
+        return float(1.0 - np.prod(1.0 - probabilities))
+
+
+    ACTION_DENIAL_EFFECTS: dict[str, float] = {
+        # Guaranteed loss of action.
+        "flinch": 1.0,
+        "mustrecharge": 1.0,
+        "recharge": 1.0,
+        # Probabilistic loss of action.
+        "confusion": 1.0 / 3.0,
+        "attract": 0.5,
+        "infatuation": 0.5,
+    }
+
+    MOVE_RESTRICTION_EFFECTS: dict[str, float] = {
+        # Approximate values because this function does not know the moveset.
+        "taunt": 0.5,
+        "encore": 0.75,
+        "disable": 0.25,
+        "torment": 0.25,
+        "healblock": 0.25,
+        "throatchop": 0.25,
+        "imprison": 0.25,
+        # Forced/locked move style effects.
+        "choicelock": 0.75,
+        "lockedmove": 0.75,
+        "rollout": 0.75,
+        "bide": 0.75,
+        "twoturnmove": 0.75,
+    }
+
+    HP_DRIFT_EFFECTS: dict[str, float] = {
+        # Harmful residual effects.
+        "leechseed": -1.0 / 8.0,
+        "partiallytrapped": -1.0 / 8.0,
+        "partiallytrappedlock": -1.0 / 8.0,
+        "wrap": -1.0 / 8.0,
+        "bind": -1.0 / 8.0,
+        "firespin": -1.0 / 8.0,
+        "whirlpool": -1.0 / 8.0,
+        "sandtomb": -1.0 / 8.0,
+        "magmastorm": -1.0 / 8.0,
+        "infestation": -1.0 / 8.0,
+        "snaptrap": -1.0 / 8.0,
+        "curse": -1.0 / 4.0,
+        "nightmare": -1.0 / 4.0,
+        # Beneficial residual effects.
+        "aquaring": 1.0 / 16.0,
+        "ingrain": 1.0 / 16.0,
+    }
+
+    PROTECTION_EFFECTS: dict[str, float] = {
+        # Full protection.
+        "protect": 1.0,
+        "detect": 1.0,
+        "kingsshield": 1.0,
+        "spikyshield": 1.0,
+        "banefulbunker": 1.0,
+        "silktrap": 1.0,
+        "burningbulwark": 1.0,
+        "obstruct": 1.0,
+        "maxguard": 1.0,
+        # Approximate because substitute HP is unknown.
+        "substitute": 0.5,
+        # Semi-invulnerable two-turn move states.
+        "fly": 1.0,
+        "dig": 1.0,
+        "dive": 1.0,
+        "bounce": 1.0,
+        "phantomforce": 1.0,
+        "shadowforce": 1.0,
+        # Charging moves are not true protection, but still encode some defensive tempo.
+        "skyattack": 0.5,
+        "solarbeam": 0.25,
+        "solarblade": 0.25,
+        # Survives lethal damage, but does not block damage.
+        "endure": 0.5,
+    }
+
+
+    # Output order: [action_denial, move_restriction, hp_drift, protection]
+    def compute_volatile_status_summary(statuses: list[str]) -> np.ndarray:
+        action_denial_probs = np.array(
+            [
+                ACTION_DENIAL_EFFECTS[s]
+                for s in statuses
+                if s in ACTION_DENIAL_EFFECTS
+            ],
+            dtype=np.float32,
+        )
+
+        move_restriction_values = np.array(
+            [
+                MOVE_RESTRICTION_EFFECTS[s]
+                for s in statuses
+                if s in MOVE_RESTRICTION_EFFECTS
+            ],
+            dtype=np.float32,
+        )
+
+        hp_drift_raw = sum(HP_DRIFT_EFFECTS.get(s, 0.0) for s in statuses)
+
+        protection_values = np.array(
+            [PROTECTION_EFFECTS[s] for s in statuses if s in PROTECTION_EFFECTS],
+            dtype=np.float32,
+        )
+
+        action_denial = _combine_independent_probabilities(action_denial_probs)
+        move_restriction = _combine_independent_probabilities(
+            move_restriction_values
+        )
+
+        hp_drift = np.clip(hp_drift_raw / 0.25, -1.0, 1.0)
+
+        protection = (
+            float(np.max(protection_values)) if protection_values.size > 0 else 0.0
+        )
+
+        return np.array(
+            [
+                np.clip(action_denial, 0.0, 1.0),
+                np.clip(move_restriction, 0.0, 1.0),
+                hp_drift,
+                np.clip(protection, 0.0, 1.0),
+            ],
+            dtype=np.float32,
+        )
+
+    return (compute_volatile_status_summary,)
+
+
+@app.cell(hide_code=True)
+def _():
+    DEFENSIVE_SCREEN_EFFECTS: dict[str, float] = {
+        "reflect": 0.35,
+        "lightscreen": 0.35,
+        "auroraveil": 0.5,
+    }
+
+    SPEED_SUPPORT_EFFECTS: dict[str, float] = {
+        "tailwind": 1.0,
+        # Usually irrelevant in no-switch 1v1 unless it already affected
+        # the active Pokemon before the state snapshot.
+        "stickyweb": -0.5,
+    }
+
+    STATUS_PROTECTION_EFFECTS: dict[str, float] = {
+        "safeguard": 0.75,
+        "mist": 0.25,
+        "luckychant": 0.25,
+    }
+
+
+    #  Output order: [defensive_screen, speed_support, status_protection]
+    def compute_side_condition_summary(conditions: list[str]) -> np.ndarray:
+        defensive_screen = (
+            max(DEFENSIVE_SCREEN_EFFECTS.get(c, 0.0) for c in conditions)
+            if conditions
+            else 0.0
+        )
+
+        speed_support = sum(SPEED_SUPPORT_EFFECTS.get(c, 0.0) for c in conditions)
+
+        status_protection = (
+            max(STATUS_PROTECTION_EFFECTS.get(c, 0.0) for c in conditions)
+            if conditions
+            else 0.0
+        )
+
+        return np.array(
+            [
+                np.clip(defensive_screen, 0.0, 1.0),
+                np.clip(speed_support, -1.0, 1.0),
+                np.clip(status_protection, 0.0, 1.0),
+            ],
+            dtype=np.float32,
+        )
+
+    return (compute_side_condition_summary,)
+
+
+@app.cell(hide_code=True)
+def _():
+    all_weathers = {
+        "raindance",
+        "sunnyday",
+        "sandstorm",
+        "snowscape",
+    }
+    all_terrains = {
+        "electricterrain",
+        "grassyterrain",
+        "mistyterrain",
+        "psychicterrain",
+    }
+    all_major_statuses = {"brn", "par", "slp", "frz", "psn", "tox"}
+
+
+    def make_onehot_map(all_states: set[str]) -> dict[str, np.ndarray]:
+        encoding_map = {
+            v: np.eye(len(all_states))[i] for i, v in enumerate(all_states)
+        }
+        encoding_map[""] = np.zeros(len(all_states))
+        return encoding_map
+
+
+    weathers_encoding_map = make_onehot_map(all_weathers)
+    terrains_encoding_map = make_onehot_map(all_terrains)
+    major_statuses_encoding_map = make_onehot_map(all_major_statuses)
+    return (
+        major_statuses_encoding_map,
+        terrains_encoding_map,
+        weathers_encoding_map,
+    )
+
+
+@app.function
+def compute_boost_score(boost: int) -> float:
+    stage = max(-6, min(6, boost))
+
+    if boost >= 0:
+        multiplier = (2 + boost) / 2
+    else:
+        multiplier = 2 / (2 - boost)
+
+    return np.log2(multiplier)
+
+
+@app.cell
+def _(
+    compute_side_condition_summary,
+    compute_volatile_status_summary,
+    major_statuses_encoding_map,
+    map_type_to_score,
+    metadata_cols,
+    move_embeddings_df,
+    moves_df,
+    terrains_encoding_map,
+    weathers_encoding_map,
+):
+    def compute_input_to_mlp(p0: sdw.PlayerState, p1: sdw.PlayerState):
+        move_ids_0 = [slot["id"] for slot in p0.slots]
+        return np.concatenate(
+            [
+                move_embeddings_df[
+                    move_embeddings_df["move_identifier"].isin(move_ids_0)
+                ]
+                .drop(columns=metadata_cols)
+                .to_numpy()
+                .flatten(),
+                [slot["pp"] for slot in p0.slots],
+                [
+                    map_type_to_score(
+                        p0.pokemon["types"],
+                        p1.pokemon["types"],
+                        moves_df.loc[
+                            moves_df["move_identifier"] == move_id, "type"
+                        ].iloc[0],
+                    )
+                    for move_id in move_ids_0
+                ],
+                list(p0.pokemon["stats"].values()),
+                [
+                    compute_boost_score(boost)
+                    for boost in p0.pokemon["boosts"].values()
+                ],
+                [p0.pokemon["hp"], p1.pokemon["hp"]],
+                weathers_encoding_map[p0.weather],
+                terrains_encoding_map[p0.terrain],
+                major_statuses_encoding_map[p0.pokemon["status"]],
+                major_statuses_encoding_map[p1.pokemon["status"]],
+                compute_volatile_status_summary(p0.pokemon["volatiles"]),
+                compute_volatile_status_summary(p1.pokemon["volatiles"]),
+                compute_side_condition_summary(list(p0.side_conditions.keys())),
+                compute_side_condition_summary(list(p1.side_conditions.keys())),
+                [p0.turn],
+            ],
+            dtype=np.float32,
+        )
+
+    return (compute_input_to_mlp,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Running battles
+    """)
+    return
+
+
+@app.cell
+def _(compute_input_to_mlp, seed):
+    from showdown_wrapper import BattleConfig, PlayerState, ShowdownPool
+
+
+    def first_move_ai(p0: PlayerState, p1: PlayerState) -> tuple[int, int]:
+        print(compute_input_to_mlp(p0, p1).shape)
+        return (0, 0)
+
+
+    ai = {
+        "species": "Pikachu",
+        "types": ["Electric"],
+        "stats": {
+            "hp": 250,
+            "atk": 150,
+            "def": 100,
+            "spa": 120,
+            "spd": 100,
+            "spe": 180,
+        },
+        "moves": ["thunderbolt", "irontail", "quickattack", "thunderwave"],
+    }
+
+    configs = [
+        BattleConfig(
+            ai=ai,
+            opponent={"type": "hardcoded", "species": "Garchomp"},
+            move_selector=first_move_ai,
+            seed=seed,
+        ),
+        BattleConfig(
+            ai=ai,
+            opponent={"type": "hardcoded"},
+            move_selector=first_move_ai,
+            seed=seed,
+        ),
+        BattleConfig(
+            ai=ai,
+            opponent={"type": "random"},
+            move_selector=first_move_ai,
+            seed=seed,
+        ),
+        BattleConfig(
+            ai=ai,
+            opponent={"type": "random"},
+            move_selector=first_move_ai,
+            seed=seed,
+        ),
+    ]
+
+    with ShowdownPool(max_size=1) as pool:
+        results = pool.run_battles(configs)
+
+    for i, r in enumerate(results):
+        print(
+            f"Battle {i}: {r.winner} won in {r.turns} turns "
+            f"(p0 HP: {r.player_hp}, p1 HP: {r.opponent_hp})"
+        )
     return
 
 

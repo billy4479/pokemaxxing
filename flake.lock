@@ -44,17 +44,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1779383253,
-        "narHash": "sha256-Yub4HXcXOM/zUTPTNXmb35N5bueCaqQElkiXqCEEmV4=",
-        "ref": "refs/heads/master",
-        "rev": "e9a9d093a41038faf667a135b1675d1aed490c66",
-        "revCount": 3,
-        "type": "git",
-        "url": "file:../pokemon-showdown-wrapper"
+        "lastModified": 1779494234,
+        "narHash": "sha256-56SZ8SM5n/UfBiSHfKbb++4GPe1iDiS2qAWYMCc8PG4=",
+        "owner": "billy4479",
+        "repo": "pokemon-showdown-wrapper",
+        "rev": "0732a3a0e9c5550c149da48f9ca701dae9a6ecd4",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:../pokemon-showdown-wrapper"
+        "owner": "billy4479",
+        "repo": "pokemon-showdown-wrapper",
+        "type": "github"
       }
     },
     "root": {
