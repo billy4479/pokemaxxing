@@ -9,6 +9,10 @@ import pandas as pd
 from ..io import DatasetLoader
 from .deprecated_moves import infer_deprecated_moves
 
+SHOWDOWN_IDENTIFIER_MAP: dict[str, str] = {
+    "vice-grip": "visegrip",
+}
+
 
 def _normalize_name(value: str) -> str:
     return value.replace("-", "_")
@@ -233,7 +237,8 @@ def build_moves_table(data_dir: str = "csv") -> pd.DataFrame:
     """Return a simplified unified moves table for analysis.
 
     This keeps move behavior columns while dropping contest, meta prefix,
-    and flag-prefixed columns.
+    and flag-prefixed columns. Deprecated moves are included, and move
+    identifiers follow Pokémon Showdown naming conventions.
     """
 
     table = build_moves_table_full(data_dir=data_dir)
@@ -293,7 +298,11 @@ def build_moves_table(data_dir: str = "csv") -> pd.DataFrame:
     drop_columns.extend(col for col in table.columns if ("contest" in col))
     table = table.drop(columns=[col for col in drop_columns if col in table.columns])
 
-    deprecated_move_ids = set(infer_deprecated_moves(data_dir=data_dir)["move_id"])
-    table = table[~table["move_id"].isin(deprecated_move_ids)].copy()
+    table["move_identifier"] = table["move_identifier"].replace(
+        SHOWDOWN_IDENTIFIER_MAP
+    )
+    table["move_identifier"] = table["move_identifier"].str.replace(
+        "-", "", regex=False
+    )
 
     return table.reset_index(drop=True)

@@ -9,11 +9,10 @@ app = marimo.App(
 with app.setup:
     import json
     from collections.abc import Callable
-    from dataclasses import dataclass, field
+    from dataclasses import dataclass
     from enum import Enum
     from functools import lru_cache
     from pathlib import Path
-    from typing import Any
 
     import marimo as mo
     import matplotlib.pyplot as plt
@@ -237,7 +236,8 @@ def _(moves_df):
     numeric_cols = [
         col
         for col in moves_df.columns
-        if col not in metadata_cols + categorical_cols + flag_cols + stat_change_cols
+        if col
+        not in metadata_cols + categorical_cols + flag_cols + stat_change_cols
         and pd.api.types.is_numeric_dtype(moves_df[col])
     ]
 
@@ -262,7 +262,9 @@ def _(moves_df, numeric_cols):
     numeric_df = moves_df[numeric_cols].astype(np.float32)
     numeric_mean = numeric_df.mean(axis=0)
     numeric_std = numeric_df.std(axis=0, ddof=0).replace(0.0, 1.0)
-    numeric_scaled_df = ((numeric_df - numeric_mean) / numeric_std).astype(np.float32)
+    numeric_scaled_df = ((numeric_df - numeric_mean) / numeric_std).astype(
+        np.float32
+    )
     return (numeric_scaled_df,)
 
 
@@ -333,7 +335,9 @@ def _(
 
     assert start == feature_df.shape[1]
 
-    column_to_index = {column: index for index, column in enumerate(feature_df.columns)}
+    column_to_index = {
+        column: index for index, column in enumerate(feature_df.columns)
+    }
 
     categorical_feature_groups = {}
     for categorical_col in categorical_cols:
@@ -358,7 +362,8 @@ def _(
 
     {
         "feature_groups": {
-            group_name: group["size"] for group_name, group in feature_groups.items()
+            group_name: group["size"]
+            for group_name, group in feature_groups.items()
         },
         "categorical_feature_groups": {
             group_name: group["size"]
@@ -421,8 +426,10 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             _reconstruction_logits = self.decode(_latent)
             return _reconstruction_logits, _latent
 
+
     def _zero_like_loss(inputs):
         return inputs.sum() * 0.0
+
 
     def _mse_group_loss(reconstruction_logits, inputs, group_name):
         group_slice = feature_groups[group_name]["slice"]
@@ -436,6 +443,7 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             reduction="mean",
         )
 
+
     def _bce_group_loss(reconstruction_logits, inputs, group_name):
         group_slice = feature_groups[group_name]["slice"]
 
@@ -447,6 +455,7 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             inputs[:, group_slice],
             reduction="mean",
         )
+
 
     def _categorical_grouped_cross_entropy_loss(reconstruction_logits, inputs):
         categorical_losses = []
@@ -472,6 +481,7 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             return _zero_like_loss(inputs)
 
         return torch.stack(categorical_losses).mean()
+
 
     def ae_loss(
         reconstruction_logits,
@@ -566,7 +576,9 @@ def _(MoveAutoencoder, ae_loss, device):
         using_cache = False
 
         if use_cache and Path(cache_path).exists():
-            model.load_state_dict(torch.load(cache_path, weights_only=True))
+            model.load_state_dict(
+                torch.load(cache_path, map_location=device, weights_only=True)
+            )
             using_cache = True
         else:
             optimizer = torch.optim.AdamW(
@@ -618,7 +630,8 @@ def _(MoveAutoencoder, ae_loss, device):
                 history_row = {
                     "epoch": epoch,
                     **{
-                        key: value / dataset_size for key, value in epoch_totals.items()
+                        key: value / dataset_size
+                        for key, value in epoch_totals.items()
                     },
                 }
 
@@ -641,7 +654,9 @@ def _(MoveAutoencoder, ae_loss, device):
             reconstruction_logits_eval = model.decode(latent_embedding)
 
         embedding_matrix = latent_embedding.detach().cpu().numpy()
-        reconstruction_logits_matrix = reconstruction_logits_eval.detach().cpu().numpy()
+        reconstruction_logits_matrix = (
+            reconstruction_logits_eval.detach().cpu().numpy()
+        )
 
         return (
             model,
@@ -687,10 +702,15 @@ def _(device, training_history):
             "final_loss": float(final_training_row["loss"]),
             "best_loss": float(training_history["loss"].min()),
             "final_recon_numeric": float(final_training_row["recon_numeric"]),
-            "final_recon_stat_change": float(final_training_row["recon_stat_change"]),
-            "final_recon_categorical": float(final_training_row["recon_categorical"]),
+            "final_recon_stat_change": float(
+                final_training_row["recon_stat_change"]
+            ),
+            "final_recon_categorical": float(
+                final_training_row["recon_categorical"]
+            ),
             "final_recon_flags": float(final_training_row["recon_flags"]),
         }
+
 
     get_training_summary()
     return
@@ -748,6 +768,7 @@ def _(training_history):
         fig.tight_layout()
         return fig
 
+
     plot_training()
     return
 
@@ -803,6 +824,7 @@ def _(
         index=feature_df.index,
     )
 
+
     def _safe_binary_metrics(y_true, y_pred):
         precision, recall, f1, support = precision_recall_fscore_support(
             y_true.reshape(-1),
@@ -820,6 +842,7 @@ def _(
             "f1": float(f1),
             "support": int(y_true.sum()),
         }
+
 
     def evaluate_numeric_group(group_name):
         group_slice = feature_groups[group_name]["slice"]
@@ -844,6 +867,7 @@ def _(
         ).sort_values("mae", ascending=False)
 
         return summary, per_column
+
 
     def evaluate_categorical_groups():
         rows = []
@@ -882,12 +906,15 @@ def _(
 
         return summary, per_categorical
 
+
     def evaluate_binary_group(group_name):
         group_slice = feature_groups[group_name]["slice"]
         group_columns = feature_groups[group_name]["columns"]
 
         y_true = feature_df.iloc[:, group_slice].to_numpy().astype(bool)
-        y_pred = reconstruction_probability_df.iloc[:, group_slice].to_numpy() >= 0.5
+        y_pred = (
+            reconstruction_probability_df.iloc[:, group_slice].to_numpy() >= 0.5
+        )
 
         micro = _safe_binary_metrics(y_true, y_pred)
 
@@ -1141,14 +1168,18 @@ def _(seed):
 
 
 @app.function
-def plot_umap_pca_2d(umap, pca, labels, get_mask, title, legend_title="", legend=True):
+def plot_umap_pca_2d(
+    umap, pca, labels, get_mask, title, legend_title="", legend=True
+):
     fig, (ax1, ax2) = plt.subplots(1, 2)
 
     fig.suptitle(title)
     fig.tight_layout()
 
     cmap = plt.get_cmap("tab20")
-    colors_per_label = {label: cmap(i % cmap.N) for i, label in enumerate(labels)}
+    colors_per_label = {
+        label: cmap(i % cmap.N) for i, label in enumerate(labels)
+    }
 
     def scatter(ax, data):
         ax.grid(alpha=0.25)
@@ -1350,13 +1381,15 @@ def _(embedding_matrix, metadata_cols, moves_df):
     )
 
     move_embeddings_df
-    return (move_embeddings_df,)
+    return embedding_cols, move_embeddings_df
 
 
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
     # Evolution
+
+    Initially I thought about using the [DEAP](https://github.com/deap/DEAP) library, but I ended up writing most of the code myself anyways so I dropped the library and wrote everything from scratch.
     """)
     return
 
@@ -1582,6 +1615,7 @@ def _():
 
         return np.log2(multiplier)
 
+
     def map_type_to_score(
         own_type: list[str],
         opp_type: list[str],
@@ -1609,6 +1643,7 @@ def _():
 
         probabilities = np.clip(probabilities, 0.0, 1.0)
         return float(1.0 - np.prod(1.0 - probabilities))
+
 
     ACTION_DENIAL_EFFECTS: dict[str, float] = {
         # Guaranteed loss of action.
@@ -1686,10 +1721,15 @@ def _():
         "endure": 0.5,
     }
 
+
     # Output order: [action_denial, move_restriction, hp_drift, protection]
     def compute_volatile_status_summary(statuses: list[str]) -> np.ndarray:
         action_denial_probs = np.array(
-            [ACTION_DENIAL_EFFECTS[s] for s in statuses if s in ACTION_DENIAL_EFFECTS],
+            [
+                ACTION_DENIAL_EFFECTS[s]
+                for s in statuses
+                if s in ACTION_DENIAL_EFFECTS
+            ],
             dtype=np.float32,
         )
 
@@ -1710,7 +1750,9 @@ def _():
         )
 
         action_denial = _combine_independent_probabilities(action_denial_probs)
-        move_restriction = _combine_independent_probabilities(move_restriction_values)
+        move_restriction = _combine_independent_probabilities(
+            move_restriction_values
+        )
 
         hp_drift = np.clip(hp_drift_raw / 0.25, -1.0, 1.0)
 
@@ -1752,6 +1794,7 @@ def _():
         "luckychant": 0.25,
     }
 
+
     #  Output order: [defensive_screen, speed_support, status_protection]
     def compute_side_condition_summary(conditions: list[str]) -> np.ndarray:
         defensive_screen = (
@@ -1782,28 +1825,26 @@ def _():
 
 @app.cell(hide_code=True)
 def _():
-    all_weathers = {
-        "raindance",
-        "sunnyday",
-        "sandstorm",
-        "snowscape",
-    }
-    all_terrains = {
+    ALL_WEATHERS = ("raindance", "sunnyday", "sandstorm", "snowscape")
+    ALL_TERRAINS = (
         "electricterrain",
         "grassyterrain",
         "mistyterrain",
         "psychicterrain",
-    }
-    all_major_statuses = {"brn", "par", "slp", "frz", "psn", "tox"}
+    )
+    ALL_MAJOR_STATUSES = ("brn", "par", "slp", "frz", "psn", "tox")
 
-    def make_onehot_map(all_states: set[str]) -> dict[str, np.ndarray]:
-        encoding_map = {v: np.eye(len(all_states))[i] for i, v in enumerate(all_states)}
-        encoding_map[""] = np.zeros(len(all_states))
-        return encoding_map
 
-    weathers_encoding_map = make_onehot_map(all_weathers)
-    terrains_encoding_map = make_onehot_map(all_terrains)
-    major_statuses_encoding_map = make_onehot_map(all_major_statuses)
+    def make_onehot_map(states: tuple[str, ...]) -> dict[str, np.ndarray]:
+        eye = np.eye(len(states), dtype=np.float32)
+        mapping = {state: eye[i] for i, state in enumerate(states)}
+        mapping[""] = np.zeros(len(states), dtype=np.float32)
+        return mapping
+
+
+    weathers_encoding_map = make_onehot_map(ALL_WEATHERS)
+    terrains_encoding_map = make_onehot_map(ALL_TERRAINS)
+    major_statuses_encoding_map = make_onehot_map(ALL_MAJOR_STATUSES)
     return (
         major_statuses_encoding_map,
         terrains_encoding_map,
@@ -1811,28 +1852,47 @@ def _():
     )
 
 
-@app.function(hide_code=True)
-def compute_boost_score(boost: int) -> float:
-    stage = max(-6, min(6, boost))
+@app.function
+def compute_boost_score(boost: int, *, accuracy_like: bool = False) -> float:
+    stage = int(np.clip(boost, -6, 6))
+    base = 3 if accuracy_like else 2
 
-    if boost >= 0:
-        multiplier = (2 + boost) / 2
+    if stage >= 0:
+        mult = (base + stage) / base
     else:
-        multiplier = 2 / (2 - boost)
+        mult = base / (base - stage)
 
-    return np.log2(multiplier)
+    return float(np.log2(mult))
+
+
+@app.cell
+def _(embedding_cols, move_embeddings_df, moves_df):
+    move_embedding_by_id = {
+        row.move_identifier: row[embedding_cols].to_numpy(dtype=np.float32)
+        for _, row in move_embeddings_df.iterrows()
+    }
+
+    move_type_by_id = dict(zip(moves_df["move_identifier"], moves_df["type"]))
+    return move_embedding_by_id, move_type_by_id
+
+
+@app.cell
+def _():
+    BOOST_KEYS = ("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+    return (BOOST_KEYS,)
 
 
 @app.cell
 def _(
+    BOOST_KEYS,
+    STAT_KEYS,
     STAT_MAX,
     compute_side_condition_summary,
     compute_volatile_status_summary,
     major_statuses_encoding_map,
     map_type_to_score,
-    metadata_cols,
-    move_embeddings_df,
-    moves_df,
+    move_embedding_by_id,
+    move_type_by_id,
     terrains_encoding_map,
     weathers_encoding_map,
 ):
@@ -1840,26 +1900,31 @@ def _(
         move_ids_0 = [slot["id"] for slot in p0.slots]
         return np.concatenate(
             [
-                move_embeddings_df[
-                    move_embeddings_df["move_identifier"].isin(move_ids_0)
-                ]
-                .drop(columns=metadata_cols)
-                .to_numpy()
-                .flatten(),
-                [slot["pp"] for slot in p0.slots],
+                np.asarray(
+                    [move_embedding_by_id[move_id] for move_id in move_ids_0],
+                    dtype=np.float32,
+                ).flatten(),
+                [slot["pp"] / slot["maxpp"] for slot in p0.slots],
                 [
                     map_type_to_score(
                         p0.pokemon["types"],
                         p1.pokemon["types"],
-                        moves_df.loc[
-                            moves_df["move_identifier"] == move_id, "type"
-                        ].iloc[0],
+                        move_type_by_id[move_id],
                     )
                     for move_id in move_ids_0
                 ],
-                [v / STAT_MAX[k] for k, v in p0.pokemon["stats"].items()],
-                [compute_boost_score(boost) for boost in p0.pokemon["boosts"].values()],
-                [p0.pokemon["hp"], p1.pokemon["hp"]],
+                [p0.pokemon["stats"][k] / STAT_MAX[k] for k in STAT_KEYS],
+                [
+                    compute_boost_score(
+                        p0.pokemon["boosts"].get(boost, 0),
+                        accuracy_like=(boost in ["accuracy", "evasion"]),
+                    )
+                    for boost in BOOST_KEYS
+                ],
+                [
+                    p0.pokemon["hp"] / max(1, p0.pokemon["stats"]["hp"]),
+                    p1.pokemon["hp"] / max(1, p1.pokemon["stats"]["hp"]),
+                ],
                 weathers_encoding_map[p0.weather],
                 terrains_encoding_map[p0.terrain],
                 major_statuses_encoding_map[p0.pokemon["status"]],
@@ -1868,7 +1933,7 @@ def _(
                 compute_volatile_status_summary(p1.pokemon["volatiles"]),
                 compute_side_condition_summary(list(p0.side_conditions.keys())),
                 compute_side_condition_summary(list(p1.side_conditions.keys())),
-                [p0.turn],
+                [p0.turn / 100],
             ],
             dtype=np.float32,
         )
@@ -1881,7 +1946,7 @@ def _():
     mo.md(r"""
     ### Layout and Forward Pass
 
-    The MLP will be tiny, for the initialial experimentation I picked `90 -> 16 -> 8 -> 4` where the outputs will be the logits of picking each move.
+    The MLP will be tiny, I picked a `90 -> 16 -> 8 -> 4` layout, where the outputs will be the logits of picking each move.
     I chose `tanh` as activation function as it bounds post-activation values to $(-1, 1)$ making the MLP less sensitive to high weights.
     """)
     return
@@ -1894,26 +1959,27 @@ def _():
 
 
 @app.cell
-def _(MLPParamSlices, MLPParamsSlices):
+def _(MLPParamsSlices):
     def compute_slices(layers: list[int]) -> MLPParamsSlices:
-        cursor_w = 0
-        cursor_b = 0
-        params_slices: MLPParamSlices = []
-        for i, input_size in enumerate(layers[:-1]):
-            output_size = layers[i + 1]
+        cursor = 0
+        params_slices = []
 
-            start_w = cursor_w
-            start_b = cursor_b
+        for fan_in, fan_out in zip(layers[:-1], layers[1:]):
+            w_start = cursor
+            cursor += fan_in * fan_out
+            w_end = cursor
 
-            cursor_w += input_size * output_size
-            cursor_b += output_size
+            b_start = cursor
+            cursor += fan_out
+            b_end = cursor
 
-            params_slices.append(((start_w, cursor_w), (start_b, cursor_b)))
+            params_slices.append(((w_start, w_end), (b_start, b_end)))
 
         return params_slices
 
+
     def count_params(slices: MLPParamsSlices) -> int:
-        return slices[-1][0][1] + slices[-1][1][1]
+        return slices[-1][1][1]
 
     return compute_slices, count_params
 
@@ -1951,18 +2017,18 @@ def _(MLP_LAYOUT, MLP_SLICES):
 
 
 @app.cell
-def _(MLP_LAYOUT, get_view):
+def _(MLP_LAYOUT, get_params_view):
     def mlp_forward(input: np.ndarray, params: np.ndarray) -> int:
         current = input
 
         for i in range(len(MLP_LAYOUT) - 2):
-            w, b = get_view(params, i)
+            w, b = get_params_view(params, i)
             current = np.tanh(current @ w + b)
 
-        w, b = get_view(params, len(MLP_LAYOUT) - 2)
-        current = current @ w + b
+        w, b = get_params_view(params, len(MLP_LAYOUT) - 2)
+        logits = current @ w + b
 
-        return np.argmax(current)
+        return int(np.argmax(logits))
 
     return (mlp_forward,)
 
@@ -2011,7 +2077,7 @@ class OpponentAIType(Enum):
 
 
 @app.cell
-def _(compute_input_to_mlp, mlp_forward, shallow):
+def _(compute_input_to_mlp, mlp_forward):
     @dataclass
     class Agent:
         params: np.ndarray
@@ -2021,11 +2087,9 @@ def _(compute_input_to_mlp, mlp_forward, shallow):
         log_sigmas: np.ndarray
 
         fitness: float | None = None
-        eval_info: dict[str, Any] = field(default_factory=dict)
 
         def invalidate_fitness(self) -> None:
             self.fitness = None
-            self.eval_info.clear()
 
         @property
         def is_evaluated(self) -> bool:
@@ -2034,13 +2098,16 @@ def _(compute_input_to_mlp, mlp_forward, shallow):
         def get_decision_function(
             self,
             opponent_policy: Callable[[sdw.PlayerState, sdw.PlayerState], int],
+            rng,
         ) -> sdw.MoveSelector:
-            def decider(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
+            def decider(
+                p0: sdw.PlayerState, p1: sdw.PlayerState
+            ) -> tuple[int, int]:
                 input = compute_input_to_mlp(p0, p1)
                 ai_move = mlp_forward(input, self.params)
-                opponent_move = opponent_policy(p0, p1)
+                opponent_move = opponent_policy(p0, p1, rng)
 
-                return ai_move, opponent_move
+                return int(ai_move), int(opponent_move)
 
             return decider
 
@@ -2053,7 +2120,7 @@ def _(compute_input_to_mlp, mlp_forward, shallow):
                     self.types,
                     self.log_sigmas.copy(),
                 )
-            if shallow:
+            else:
                 copy = Agent(
                     self.params,
                     self.stats,
@@ -2064,7 +2131,6 @@ def _(compute_input_to_mlp, mlp_forward, shallow):
 
             if copy_fitness:
                 copy.fitness = self.fitness
-                copy.eval_info = dict(self.eval_info)
 
             return copy
 
@@ -2085,8 +2151,7 @@ def _(compute_input_to_mlp, mlp_forward, shallow):
 
             metadata = {
                 "types": list(self.types),
-                "fitness": self.fitness,
-                "eval_info": self.eval_info,
+                "fitness": float(self.fitness),
             }
 
             np.savez_compressed(
@@ -2112,7 +2177,6 @@ def _(compute_input_to_mlp, mlp_forward, shallow):
                     types=tuple(int(x) for x in metadata["types"]),
                     log_sigmas=data["log_sigmas"].copy(),
                     fitness=metadata["fitness"],
-                    eval_info=metadata.get("eval_info", {}),
                 )
 
             return agent
@@ -2143,6 +2207,7 @@ def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN):
         print(all_below_max, sum_below_max, all_above_min)
 
         return all_below_max and sum_below_max and all_above_min
+
 
     def genome_stats_to_integer(stats: np.ndarray) -> dict[str, int]:
         stats01 = softmax(np.asarray(stats, dtype=float))
@@ -2188,7 +2253,9 @@ def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN):
             active_indices = np.where(active)[0]
 
             if len(active_indices) == 0:
-                raise RuntimeError("No remaining capacity but budget is not exhausted")
+                raise RuntimeError(
+                    "No remaining capacity but budget is not exhausted"
+                )
 
             active_weights = weights[active_indices]
 
@@ -2237,6 +2304,7 @@ def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN):
 
         return {key: int(value) for key, value in zip(STAT_KEYS, values)}
 
+
     def random_valid_stats(rng) -> np.ndarray:
         return rng.random(len(STAT_KEYS))
 
@@ -2245,35 +2313,37 @@ def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN):
 
 @app.function
 def xavier_uniform(fan_in, fan_out, rng):
-    # Best for tanh
     limit = np.sqrt(6 / (fan_in + fan_out))
     return rng.uniform(-limit, limit, (fan_in, fan_out))
 
 
 @app.cell
 def _(metadata_cols, move_embeddings_df):
+    _feature_cols = [
+        c for c in move_embeddings_df.columns if c not in metadata_cols
+    ]
+
+    _X = move_embeddings_df[_feature_cols].to_numpy()
+
+
     def pick_random_moveset(rng):
         k = 4
-        feature_cols = [c for c in move_embeddings_df.columns if c not in metadata_cols]
-
-        X = move_embeddings_df[feature_cols].to_numpy()
 
         first = rng.integers(len(move_embeddings_df))
 
         selected = [first]
 
-        min_dist = pairwise_distances(X, X[[first]]).ravel()
+        min_dist = pairwise_distances(_X, _X[[first]]).ravel()
 
         for _ in range(1, k):
             next_idx = np.argmax(min_dist)
             selected.append(next_idx)
 
-            new_dist = pairwise_distances(X, X[[next_idx]]).ravel()
+            new_dist = pairwise_distances(_X, _X[[next_idx]]).ravel()
             min_dist = np.minimum(min_dist, new_dist)
 
         return np.array(selected)
         # , move_embeddings_df.iloc[selected]["move_identifier"].tolist()
-
     return (pick_random_moveset,)
 
 
@@ -2318,27 +2388,66 @@ def _(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Offspring
+    ## Generating offspring
+
+    New agents are created both by mutation and crossover.
     """)
     return
+
+
+@app.cell
+def _(move_embeddings_df):
+    def repair_duplicate_moves(moves: np.ndarray, rng) -> np.ndarray:
+        moves = moves.copy()
+        used = set()
+
+        for i, move in enumerate(moves):
+            move = int(move)
+
+            if move not in used:
+                used.add(move)
+                continue
+
+            # Resample until unique. Fine because moveset size is only 4.
+            while True:
+                new_move = int(rng.integers(len(move_embeddings_df)))
+                if new_move not in used:
+                    moves[i] = new_move
+                    used.add(new_move)
+                    break
+
+        return moves
+
+    return (repair_duplicate_moves,)
 
 
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
     ### Mutations
+
+    Mutation is the main mechanism driving diversity in the MLP weights as crossing over parts of them to other agents will distrupt the whole network.
+    Variances for the mutation of the weights also mutate along with everything else using a simple gaussian noise.
+
+    Types are categorical variables, therefore they mutate just using a jump.
+    There is also a small probability that the type collapses to a monotype.
+
+    Moves mutate by either moving to another one close to the original one in the latent space, or by performing a random jump.
+    When performing a local jump, the probability of choosing a certain move is a gaussian distribution over the distances.
+
+    Stats also change using gaussian noise with a fixed sigma.
     """)
     return
 
 
 @app.cell
 def _(Agent):
-    def mutate_sigma(agent: Agent, tau=0.10):
+    def mutate_sigma(agent: Agent, rng, tau=0.10):
         LOG_SIGMA_MIN = np.log(1e-4)
         LOG_SIGMA_MAX = np.log(0.5)
 
-        agent.log_sigmas = agent.log_sigmas.copy() + np.clip(
-            np.random.normal(0, tau, size=agent.log_sigmas.shape),
+        agent.log_sigmas = np.clip(
+            agent.log_sigmas + rng.normal(0, tau, size=agent.log_sigmas.shape),
             LOG_SIGMA_MIN,
             LOG_SIGMA_MAX,
         )
@@ -2350,7 +2459,7 @@ def _(Agent):
 
 @app.cell
 def _(Agent, MLP_LAYOUT, get_params_view):
-    def mutate_params(agent: Agent, indpb=0.05):
+    def mutate_params(agent: Agent, rng, indpb=0.05):
         params = agent.params.copy()
         sigmas = np.exp(agent.log_sigmas)
 
@@ -2359,11 +2468,11 @@ def _(Agent, MLP_LAYOUT, get_params_view):
             sigma_w = sigmas[layer * 2]
             sigma_b = sigmas[layer * 2 + 1]
 
-            mask_w = np.random.random(w.shape) < indpb
-            mask_b = np.random.random(b.shape) < indpb
+            mask_w = rng.random(w.shape) < indpb
+            mask_b = rng.random(b.shape) < indpb
 
-            w[mask_w] += np.random.normal(0, sigma_w, size=mask_w.sum())
-            b[mask_b] += np.random.normal(0, sigma_b, size=mask_b.sum())
+            w[mask_w] += rng.normal(0, sigma_w, size=mask_w.sum())
+            b[mask_b] += rng.normal(0, sigma_b, size=mask_b.sum())
 
             assert np.shares_memory(w, params)
             assert np.shares_memory(b, params)
@@ -2375,18 +2484,18 @@ def _(Agent, MLP_LAYOUT, get_params_view):
 
 
 @app.cell
-def _(Agent, rng, types_unique):
-    def mutate_type(agent: Agent, p=0.25, p_collapse=0.05):
+def _(Agent, types_unique):
+    def mutate_type(agent: Agent, rng, p=0.25, p_collapse=0.05):
         t1, t2 = agent.types
 
-        if np.random.random() < p:
-            t1 = rng.integers(len(types_unique))
+        if rng.random() < p:
+            t1 = rng.integers(len(types_unique), dtype=int)
 
-        if np.random.random() < p:
-            t2 = rng.integers(len(types_unique))
+        if rng.random() < p:
+            t2 = rng.integers(len(types_unique), dtype=int)
 
-        if np.random.random() < p_collapse:
-            if np.random.random() < 0.5:
+        if rng.random() < p_collapse:
+            if rng.random() < 0.5:
                 t2 = t1
             else:
                 t1 = t2
@@ -2401,7 +2510,9 @@ def _(Agent, rng, types_unique):
 def _(metadata_cols, move_embeddings_df):
     SIGMA_MOVE_CHANGE = 0.5
 
-    _feature_cols = [c for c in move_embeddings_df.columns if c not in metadata_cols]
+    _feature_cols = [
+        c for c in move_embeddings_df.columns if c not in metadata_cols
+    ]
 
     _X = move_embeddings_df[_feature_cols].to_numpy()
 
@@ -2416,21 +2527,21 @@ def _(metadata_cols, move_embeddings_df):
 
 
 @app.cell
-def _(Agent, move_embeddings_df, move_local_change_p, rng):
-    def mutate_moveset(agent: Agent, p_replace=0.25, p_jump=0.2):
+def _(Agent, move_embeddings_df, move_local_change_p, repair_duplicate_moves):
+    def mutate_moveset(agent: Agent, rng, p_replace=0.25, p_jump=0.2):
         moves = agent.moves.copy()
 
         for i in range(len(moves)):
-            if np.random.random() < p_replace:
+            if rng.random() < p_replace:
                 current = moves[i]
 
-                if np.random.random() > p_jump:
+                if rng.random() > p_jump:
                     probs = move_local_change_p[current]
                     moves[i] = rng.choice(len(move_embeddings_df), p=probs)
                 else:
                     moves[i] = rng.integers(len(move_embeddings_df))
 
-        agent.moves = moves
+        agent.moves = repair_duplicate_moves(moves, rng)
         return agent
 
     return (mutate_moveset,)
@@ -2438,11 +2549,11 @@ def _(Agent, move_embeddings_df, move_local_change_p, rng):
 
 @app.cell
 def _(Agent):
-    def mutate_stats(agent: Agent, sigma=0.1, indpb=0.5):
+    def mutate_stats(agent: Agent, rng, sigma=0.1, indpb=0.5):
         stats = agent.stats.copy()
 
-        mask = np.random.random(stats.shape) < indpb
-        stats[mask] += np.random.normal(0, sigma, size=mask.sum())
+        mask = rng.random(stats.shape) < indpb
+        stats[mask] += rng.normal(0, sigma, size=mask.sum())
 
         agent.stats = stats
         return agent
@@ -2459,21 +2570,21 @@ def _(
     mutate_stats,
     mutate_type,
 ):
-    def mutate_all(agent: Agent):
-        if np.random.random() < 0.40:
-            agent = mutate_moveset(agent)
+    def mutate_all(agent: Agent, rng):
+        if rng.random() < 0.40:
+            agent = mutate_moveset(agent, rng)
 
-        if np.random.random() < 0.10:
-            agent = mutate_type(agent)
+        if rng.random() < 0.10:
+            agent = mutate_type(agent, rng)
 
-        if np.random.random() < 0.70:
-            agent = mutate_stats(agent)
+        if rng.random() < 0.70:
+            agent = mutate_stats(agent, rng)
 
-        if np.random.random() < 0.8:
-            agent = mutate_sigma(agent)
+        if rng.random() < 0.8:
+            agent = mutate_sigma(agent, rng)
 
-        if np.random.random() < 0.95:
-            agent = mutate_params(agent)
+        if rng.random() < 0.95:
+            agent = mutate_params(agent, rng)
 
         return agent
 
@@ -2484,15 +2595,19 @@ def _(
 def _():
     mo.md(r"""
     ### Crossover
+
+    Crossover is implemented for types, stats, and the moveset.
+    The MLP also can be crossed over but the whole network gets exchanged between the parents (so really no crossover occurs, just a swap),
+    but I think this can help to avoid making the weights specialize too much on a certain moveset or type.
     """)
     return
 
 
 @app.cell
-def _(Agent, rng):
-    def mate(a: Agent, b: Agent):
+def _(Agent, repair_duplicate_moves):
+    def mate(a: Agent, b: Agent, rng):
         # Moveset crossover
-        if np.random.random() < 0.5:
+        if rng.random() < 0.5:
             a.moves = a.moves.copy()
             b.moves = b.moves.copy()
 
@@ -2501,10 +2616,13 @@ def _(Agent, rng):
 
             a.moves[i], b.moves[j] = b.moves[j], a.moves[i]
 
+            a.moves = repair_duplicate_moves(a.moves, rng)
+            b.moves = repair_duplicate_moves(b.moves, rng)
+
         # Type crossover
-        if np.random.random() < 0.5:
-            i = 0 if np.random.random() < 0.5 else 1
-            j = 0 if np.random.random() < 0.5 else 1
+        if rng.random() < 0.5:
+            i = 0 if rng.random() < 0.5 else 1
+            j = 0 if rng.random() < 0.5 else 1
 
             t_a = (a.types[-(i - 1)], b.types[j])
             t_b = (b.types[-(j - 1)], a.types[i])
@@ -2513,15 +2631,15 @@ def _(Agent, rng):
             b.types = t_b
 
         # Stat crossover
-        if np.random.random() < 0.5:
-            alpha = np.random.random()
+        if rng.random() < 0.5:
+            alpha = rng.random()
             xa = a.stats.copy()
             xb = b.stats.copy()
             a.stats = alpha * xa + (1 - alpha) * xb
             b.stats = alpha * xb + (1 - alpha) * xa
 
         # MLP crossover
-        if np.random.random() < 0.2:
+        if rng.random() < 0.2:
             a.params, b.params = b.params.copy(), a.params.copy()
 
         return a, b
@@ -2533,6 +2651,8 @@ def _(Agent, rng):
 def _():
     mo.md(r"""
     ### Make Offspring
+
+    Once we have all the mutation and crossover in place we can write a function which, given the current population generates new offspring.
     """)
     return
 
@@ -2544,7 +2664,6 @@ def _(Agent, mate, mutate_all):
         population: list[Agent],
         rng,
         crossover_p: float,
-        mut_p: float,
     ) -> list[Agent]:
         offspring = []
 
@@ -2554,18 +2673,18 @@ def _(Agent, mate, mutate_all):
             p2 = population[parent_ids[1]].copy(deep=False)
 
             if rng.random() < crossover_p:
-                children = mate(p1, p2)
+                children = mate(p1, p2, rng)
                 if rng.random() < 0.5:
-                    mutate_all(children[0])
+                    mutate_all(children[0], rng)
                 if rng.random() < 0.5:
-                    mutate_all(children[1])
+                    mutate_all(children[1], rng)
 
                 offspring.extend(children)
 
                 continue
 
-            offspring.append(mutate_all(p1))
-            offspring.append(mutate_all(p2))
+            offspring.append(mutate_all(p1, rng))
+            offspring.append(mutate_all(p2, rng))
 
         return offspring
 
@@ -2575,9 +2694,82 @@ def _(Agent, mate, mutate_all):
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Sampling adversaries
+    ## Choosing Opponents
+
+    This part revealed to be the hardest and most incomplete part of this project.
+
+    To evaluate my agent I need to make it battle some opponents, however I found it hard to find an efficient way to make opponents "smart".
+    Each opponent has a legal (as in "it exists and it is valid in the actual game") physical configuration, i.e. species, stats and moveset, and its own battle policy.
+
+    The physical configuration is either chosen at random or from a pool of ChatGPT-crafted "decent" opponent, which should contain enough variety and different play strategies.
+
+    However finding a good battle policy for opponents deemed to be very hard.
+    Each opponet will pick one of the following policies: some opponets just play at random, some follow some simple heuristic, some use the same MLP params from some other individual in the population.
+
+    Coevolution is definitely an interesing in theory, but it may lead to the agents learning how to exploit their own flaws rather than actually fixing them.
     """)
     return
+
+
+@app.cell
+def _():
+    OpponentConfig = tuple[sdw.OpponentConfig, Callable, float]
+    return (OpponentConfig,)
+
+
+@app.cell
+def _(
+    Agent,
+    OpponentConfig,
+    heuristic_opponent_policy,
+    mlp_opponent_policy_factory,
+    opponent_policies,
+    selected_opponents_pool,
+):
+    def sample_adversaries(
+        n: int, rng, best_agent: Agent | None, population: list[Agent]
+    ) -> list[OpponentConfig]:
+        opponent_configs = []
+
+        for _ in range(n):
+            policy = rng.choice(
+                np.array(list(opponent_policies.keys())),
+                p=np.array([0.3, 0.3, 0.3, 0.1]),
+            )
+
+            if policy == OpponentAIType.CHAMPION_MLP and best_agent is None:
+                policy = OpponentAIType.RANDOM_MLP
+
+            opponent: sdw.OpponentConfig
+            if rng.random() < 0.2:
+                opponent = {"type": "random"}
+            else:
+                opponent = {
+                    "type": "specified",
+                    **selected_opponents_pool[
+                        int(rng.integers(len(selected_opponents_pool)))
+                    ],
+                }
+
+            match policy:
+                case OpponentAIType.RANDOM:
+                    policy_fn = random_opponent_policy
+                case OpponentAIType.HEURISTIC:
+                    policy_fn = heuristic_opponent_policy
+                case OpponentAIType.RANDOM_MLP:
+                    policy_fn = mlp_opponent_policy_factory(
+                        population[int(rng.integers(len(population)))].params
+                    )
+                case OpponentAIType.CHAMPION_MLP:
+                    policy_fn = mlp_opponent_policy_factory(best_agent.params)
+
+            opponent_configs.append(
+                (opponent, policy_fn, opponent_policies[policy])
+            )
+
+        return opponent_configs
+
+    return (sample_adversaries,)
 
 
 @app.cell(hide_code=True)
@@ -2594,20 +2786,34 @@ def random_opponent_policy(p0: sdw.PlayerState, p1: sdw.PlayerState, rng):
 
 
 @app.cell
-def _(map_type_to_score, moves_df):
+def _(moves_df):
+    move_info_by_id = {
+        row.move_identifier: (row.power, row.type)
+        for row in moves_df.itertuples(index=False)
+    }
+    return (move_info_by_id,)
+
+
+@app.cell
+def _(map_type_to_score, move_info_by_id):
     def heuristic_opponent_policy(p0: sdw.PlayerState, p1: sdw.PlayerState, rng):
-        moves = [
-            moves_df.loc[moves_df["move_identifier"] == slot.id].iloc[0]
-            for slot in p1.slots
-        ]
+        try:
+            moves = [move_info_by_id[slot["id"]] for slot in p1.slots]
+        except Exception as e:
+            for slot in p1.slots:
+                print(slot["id"])
+            raise e
 
         power_estimate = [
-            move["power"]
-            * np.exp(
-                map_type_to_score(
-                    p1.pokemon["types"],
-                    p0.pokemon["types"],
-                    move["type"],
+            move[0]
+            * (
+                2.0
+                ** (
+                    map_type_to_score(
+                        p1.pokemon["types"],
+                        p0.pokemon["types"],
+                        move[1],
+                    )
                 )
             )
             for move in moves
@@ -2640,66 +2846,570 @@ def _():
     return (opponent_policies,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
-    selected_opponents_pool = []
+    selected_opponents_pool = [
+        # Fast special attacker: simple pressure, coverage-based
+        {
+            "species": "alakazam",
+            "moves": ["psychic", "focusblast", "shadowball", "energyball"],
+        },
+        # Fast physical attacker: contact offense + priority
+        {
+            "species": "weavile",
+            "moves": ["icepunch", "knockoff", "iceshard", "lowsweep"],
+        },
+        # Bulky setup sweeper: tries to boost, then sweep
+        {
+            "species": "dragonite",
+            "moves": ["dragondance", "dragonclaw", "firepunch", "roost"],
+        },
+        # Physical wallbreaker: very high immediate damage
+        {
+            "species": "machamp",
+            "moves": ["closecombat", "knockoff", "stoneedge", "icepunch"],
+        },
+        # Special wallbreaker: powerful but slower
+        {
+            "species": "hydreigon",
+            "moves": ["dracometeor", "darkpulse", "flamethrower", "flashcannon"],
+        },
+        # Bulky recovery/stall-ish: sustain + chip
+        {"species": "milotic", "moves": ["scald", "recover", "icebeam", "toxic"]},
+        # Defensive poison/status control
+        {
+            "species": "toxapex",
+            "moves": ["scald", "recover", "toxic", "venoshock"],
+        },
+        # Burn-control physical wall
+        {
+            "species": "rotom",
+            "moves": ["thunderbolt", "shadowball", "willowisp", "thunderwave"],
+        },
+        # Priority-focused attacker
+        {
+            "species": "scizor",
+            "moves": ["bulletpunch", "xscissor", "swordsdance", "roost"],
+        },
+        # Setup special sweeper
+        {
+            "species": "volcarona",
+            "moves": ["quiverdance", "fierydance", "bugbuzz", "gigadrain"],
+        },
+        # Setup physical sweeper with coverage
+        {
+            "species": "gyarados",
+            "moves": ["dragondance", "waterfall", "crunch", "icefang"],
+        },
+        # Curse/rest bulky win condition
+        {
+            "species": "snorlax",
+            "moves": ["curse", "bodyslam", "rest", "crunch"],
+        },
+        # Leech seed/protect attrition
+        {
+            "species": "ferrothorn",
+            "moves": ["powerwhip", "gyroball", "bodypress", "protect"],
+        },
+        # Hazard/control style, even in 1v1 this tests bad moves / field awareness
+        {
+            "species": "skarmory",
+            "moves": ["bravebird", "roost", "spikes", "whirlwind"],
+        },
+        # Trick/disruption style
+        {
+            "species": "gardevoir",
+            "moves": ["moonblast", "psychic", "thunderbolt", "calmmind"],
+        },
+        # Mixed attacker
+        {
+            "species": "infernape",
+            "moves": ["closecombat", "flareblitz", "grassknot", "machpunch"],
+        },
+        # Weather-dependent recovery / bulky grass
+        {
+            "species": "venusaur",
+            "moves": ["gigadrain", "sludgebomb", "synthesis", "earthpower"],
+        },
+        # Electric pivot-like attacker
+        {
+            "species": "jolteon",
+            "moves": ["thunderbolt", "voltswitch", "shadowball", "thunderwave"],
+        },
+        # Ground-type wallbreaker
+        {
+            "species": "mamoswine",
+            "moves": ["earthquake", "iciclecrash", "iceshard", "stoneedge"],
+        },
+        # Bulky ground with recovery
+        {
+            "species": "hippowdon",
+            "moves": ["earthquake", "slackoff", "stoneedge", "toxic"],
+        },
+        # Calm Mind bulky special setup
+        {
+            "species": "slowbro",
+            "moves": ["scald", "psyshock", "calmmind", "slackoff"],
+        },
+        # Nasty Plot special sweeper
+        {
+            "species": "lucario",
+            "moves": ["nastyplot", "aurasphere", "flashcannon", "vacuumwave"],
+        },
+        # Swords Dance physical sweeper
+        {
+            "species": "garchomp",
+            "moves": ["swordsdance", "earthquake", "dragonclaw", "stoneedge"],
+        },
+        # Annoying status + recovery
+        {
+            "species": "umbreon",
+            "moves": ["foulplay", "toxic", "moonlight", "protect"],
+        },
+        # High-risk inaccurate nukes
+        {
+            "species": "nidoking",
+            "moves": ["earthpower", "sludgewave", "fireblast", "thunderbolt"],
+        },
+        # Anti-setup phazing-ish tank
+        {
+            "species": "suicune",
+            "moves": ["scald", "icebeam", "calmmind", "rest"],
+        },
+        # Frail glass cannon
+        {
+            "species": "gengar",
+            "moves": ["shadowball", "sludgewave", "focusblast", "destinybond"],
+        },
+        # Rock polish / speed-boosting physical attacker
+        {
+            "species": "rhyperior",
+            "moves": ["rockpolish", "stoneedge", "earthquake", "megahorn"],
+        },
+        # Screens/support-ish opponent, tests whether your agent punishes low damage
+        {
+            "species": "klefki",
+            "moves": ["flashcannon", "dazzlinggleam", "reflect", "lightscreen"],
+        },
+        # Pure brute-force legendary baseline
+        {
+            "species": "mewtwo",
+            "moves": ["psychic", "aurasphere", "icebeam", "recover"],
+        },
+        # Physical priority / setup
+        {
+            "species": "azumarill",
+            "moves": ["liquidation", "playrough", "icepunch", "waterfall"],
+        },
+        {
+            "species": "bisharp",
+            "moves": ["swordsdance", "ironhead", "nightslash", "knockoff"],
+        },
+        {
+            "species": "breloom",
+            "moves": ["swordsdance", "machpunch", "bulletseed", "rocktomb"],
+        },
+        {
+            "species": "crawdaunt",
+            "moves": ["swordsdance", "crabhammer", "knockoff", "crunch"],
+        },
+        {
+            "species": "mimikyu",
+            "moves": ["swordsdance", "playrough", "shadowclaw", "shadowsneak"],
+        },
+        {
+            "species": "metagross",
+            "moves": ["meteormash", "zenheadbutt", "earthquake", "bulletpunch"],
+        },
+        {
+            "species": "conkeldurr",
+            "moves": ["bulkup", "drainpunch", "icepunch", "knockoff"],
+        },
+        {
+            "species": "staraptor",
+            "moves": ["bravebird", "closecombat", "doubleedge", "quickattack"],
+        },
+        # Physical wallbreakers
+        {
+            "species": "darmanitan",
+            "moves": ["flareblitz", "earthquake", "rockslide", "uturn"],
+        },
+        {
+            "species": "heracross",
+            "moves": ["closecombat", "megahorn", "stoneedge", "swordsdance"],
+        },
+        {
+            "species": "krookodile",
+            "moves": ["earthquake", "knockoff", "stoneedge", "taunt"],
+        },
+        {
+            "species": "electivire",
+            "moves": ["wildcharge", "icepunch", "earthquake", "crosschop"],
+        },
+        {
+            "species": "rampardos",
+            "moves": ["headsmash", "earthquake", "zenheadbutt", "firepunch"],
+        },
+        {
+            "species": "slaking",
+            "moves": ["gigaimpact", "earthquake", "hammerarm", "suckerpunch"],
+        },
+        {
+            "species": "archeops",
+            "moves": ["stoneedge", "acrobatics", "earthquake", "uturn"],
+        },
+        {
+            "species": "haxorus",
+            "moves": ["dragondance", "outrage", "earthquake", "poisonjab"],
+        },
+        # Fast offense
+        {
+            "species": "aerodactyl",
+            "moves": ["stoneedge", "dualwingbeat", "earthquake", "taunt"],
+        },
+        {
+            "species": "sceptile",
+            "moves": ["leafstorm", "dragonpulse", "focusblast", "gigadrain"],
+        },
+        {
+            "species": "greninja",
+            "moves": ["hydropump", "darkpulse", "icebeam", "gunkshot"],
+        },
+        {
+            "species": "dragapult",
+            "moves": ["dragondarts", "phantomforce", "uturn", "flamethrower"],
+        },
+        {
+            "species": "meowscarada",
+            "moves": ["flowertrick", "knockoff", "playrough", "uturn"],
+        },
+        {
+            "species": "zeraora",
+            "moves": ["wildcharge", "closecombat", "knockoff", "bulkup"],
+        },
+        {
+            "species": "starmie",
+            "moves": ["hydropump", "psychic", "icebeam", "recover"],
+        },
+        # Special setup sweepers
+        {
+            "species": "chandelure",
+            "moves": ["calmmind", "shadowball", "flamethrower", "energyball"],
+        },
+        {
+            "species": "houndoom",
+            "moves": ["nastyplot", "fireblast", "darkpulse", "willowisp"],
+        },
+        {
+            "species": "porygonz",
+            "moves": ["nastyplot", "triattack", "icebeam", "thunderbolt"],
+        },
+        {
+            "species": "espeon",
+            "moves": ["calmmind", "psychic", "dazzlinggleam", "shadowball"],
+        },
+        {
+            "species": "ribombee",
+            "moves": ["quiverdance", "dazzlinggleam", "bugbuzz", "psychic"],
+        },
+        {
+            "species": "delphox",
+            "moves": ["nastyplot", "flamethrower", "psychic", "grassknot"],
+        },
+        {
+            "species": "raikou",
+            "moves": ["calmmind", "thunderbolt", "extrasensory", "scald"],
+        },
+        # Bulky special setup / sustain
+        {
+            "species": "reuniclus",
+            "moves": ["calmmind", "psychic", "focusblast", "recover"],
+        },
+        {
+            "species": "clefable",
+            "moves": ["calmmind", "moonblast", "flamethrower", "moonlight"],
+        },
+        {
+            "species": "florges",
+            "moves": ["calmmind", "moonblast", "wish", "protect"],
+        },
+        {
+            "species": "primarina",
+            "moves": ["calmmind", "sparklingaria", "moonblast", "psychic"],
+        },
+        {
+            "species": "latias",
+            "moves": ["calmmind", "dracometeor", "psychic", "recover"],
+        },
+        {
+            "species": "necrozma",
+            "moves": ["calmmind", "photongeyser", "heatwave", "moonlight"],
+        },
+        # Defensive / attrition
+        {"species": "mandibuzz", "moves": ["foulplay", "roost", "toxic", "taunt"]},
+        {
+            "species": "quagsire",
+            "moves": ["earthquake", "liquidation", "rest", "toxic"],
+        },
+        {
+            "species": "clodsire",
+            "moves": ["earthquake", "poisonjab", "rest", "toxic"],
+        },
+        {
+            "species": "tangrowth",
+            "moves": ["gigadrain", "knockoff", "earthquake", "synthesis"],
+        },
+        {"species": "vaporeon", "moves": ["scald", "icebeam", "rest", "protect"]},
+        {
+            "species": "sableye",
+            "moves": ["foulplay", "knockoff", "recover", "willowisp"],
+        },
+        {
+            "species": "palossand",
+            "moves": ["earthpower", "shadowball", "shoreup", "gigadrain"],
+        },
+        {
+            "species": "avalugg",
+            "moves": ["avalanche", "bodypress", "recover", "irondefense"],
+        },
+        # Iron Defense / Body Press style
+        {
+            "species": "corviknight",
+            "moves": ["irondefense", "bodypress", "bravebird", "uturn"],
+        },
+        {
+            "species": "magnezone",
+            "moves": ["irondefense", "bodypress", "thunderbolt", "flashcannon"],
+        },
+        {
+            "species": "bronzong",
+            "moves": ["irondefense", "bodypress", "gyroball", "rest"],
+        },
+        {
+            "species": "steelix",
+            "moves": ["curse", "earthquake", "ironhead", "bodypress"],
+        },
+        {
+            "species": "forretress",
+            "moves": ["irondefense", "bodypress", "gyroball", "explosion"],
+        },
+        # Shell Smash / explosive setup
+        {
+            "species": "blastoise",
+            "moves": ["shellsmash", "surf", "icebeam", "darkpulse"],
+        },
+        {
+            "species": "cloyster",
+            "moves": ["shellsmash", "iciclespear", "rockblast", "liquidation"],
+        },
+        {
+            "species": "omastar",
+            "moves": ["shellsmash", "surf", "icebeam", "earthpower"],
+        },
+        {
+            "species": "minior",
+            "moves": ["shellsmash", "acrobatics", "stoneedge", "earthquake"],
+        },
+        {
+            "species": "cetitan",
+            "moves": ["icespinner", "liquidation", "iceshard", "earthquake"],
+        },
+        # Mixed attackers
+        {
+            "species": "goodra",
+            "moves": ["dracometeor", "sludgebomb", "thunderbolt", "fireblast"],
+        },
+        {
+            "species": "nidoking",
+            "moves": ["earthpower", "sludgewave", "fireblast", "thunderbolt"],
+        },
+        {
+            "species": "salamence",
+            "moves": ["dragondance", "dragonclaw", "earthquake", "fireblast"],
+        },
+        {
+            "species": "kommoo",
+            "moves": [
+                "clangingscales",
+                "closecombat",
+                "flamethrower",
+                "dragondance",
+            ],
+        },
+        {
+            "species": "ironvaliant",
+            "moves": ["moonblast", "closecombat", "thunderbolt", "swordsdance"],
+        },
+        {
+            "species": "infernape",
+            "moves": ["closecombat", "flareblitz", "grassknot", "machpunch"],
+        },
+        # Status/control without sleep/evasion
+        {
+            "species": "jolteon",
+            "moves": ["thunderbolt", "voltswitch", "shadowball", "thunderwave"],
+        },
+        {
+            "species": "togekiss",
+            "moves": ["airslash", "aurasphere", "flamethrower", "thunderwave"],
+        },
+        {
+            "species": "grimmsnarl",
+            "moves": ["bulkup", "spiritbreak", "suckerpunch", "thunderwave"],
+        },
+        {
+            "species": "tinkaton",
+            "moves": ["gigatonhammer", "playrough", "knockoff", "thunderwave"],
+        },
+        {
+            "species": "moltres",
+            "moves": ["hurricane", "flamethrower", "roost", "willowisp"],
+        },
+        {
+            "species": "arcanine",
+            "moves": ["flareblitz", "extremespeed", "closecombat", "willowisp"],
+        },
+        # Perish / weird win conditions
+        {
+            "species": "lapras",
+            "moves": ["icebeam", "hydropump", "thunderbolt", "perishsong"],
+        },
+        {
+            "species": "politoed",
+            "moves": ["surf", "icebeam", "encore", "perishsong"],
+        },
+        {
+            "species": "falinks",
+            "moves": ["noretreat", "closecombat", "megahorn", "ironhead"],
+        },
+        {
+            "species": "golisopod",
+            "moves": [
+                "firstimpression",
+                "liquidation",
+                "leechlife",
+                "swordsdance",
+            ],
+        },
+        {
+            "species": "maushold",
+            "moves": ["populationbomb", "tidyup", "playrough", "bulletseed"],
+        },
+        # No-ability stress tests: normally ability-dependent mons
+        {
+            "species": "pelipper",
+            "moves": ["hurricane", "surf", "roost", "knockoff"],
+        },
+        {
+            "species": "abomasnow",
+            "moves": ["woodhammer", "blizzard", "earthquake", "iceshard"],
+        },
+        {
+            "species": "ninjask",
+            "moves": ["swordsdance", "xscissor", "acrobatics", "protect"],
+        },
+        {
+            "species": "sharpedo",
+            "moves": ["crunch", "liquidation", "icefang", "protect"],
+        },
+        {
+            "species": "sylveon",
+            "moves": ["hypervoice", "moonblast", "calmmind", "shadowball"],
+        },
+        {
+            "species": "sableye",
+            "moves": ["willowisp", "recover", "foulplay", "taunt"],
+        },
+        # Paradox / modern strong baselines
+        {
+            "species": "greattusk",
+            "moves": ["headlongrush", "closecombat", "knockoff", "rapidspin"],
+        },
+        {
+            "species": "ironhands",
+            "moves": ["swordsdance", "drainpunch", "thunderpunch", "icepunch"],
+        },
+        {
+            "species": "ironmoth",
+            "moves": ["agility", "fierydance", "sludgewave", "energyball"],
+        },
+        {
+            "species": "sandyshocks",
+            "moves": ["thunderbolt", "earthpower", "flashcannon", "stealthrock"],
+        },
+        {
+            "species": "slitherwing",
+            "moves": ["firstimpression", "closecombat", "leechlife", "flareblitz"],
+        },
+        {
+            "species": "walkingwake",
+            "moves": ["hydropump", "dracometeor", "flamethrower", "dragonpulse"],
+        },
+        # Strong legendary / high-BST baselines
+        {
+            "species": "zapdos",
+            "moves": ["thunderbolt", "hurricane", "heatwave", "roost"],
+        },
+        {
+            "species": "moltres",
+            "moves": ["flamethrower", "hurricane", "roost", "willowisp"],
+        },
+        {
+            "species": "terrakion",
+            "moves": ["swordsdance", "closecombat", "stoneedge", "earthquake"],
+        },
+        {
+            "species": "cobalion",
+            "moves": ["swordsdance", "closecombat", "ironhead", "stoneedge"],
+        },
+        {
+            "species": "latios",
+            "moves": ["dracometeor", "psychic", "aurasphere", "calmmind"],
+        },
+        {
+            "species": "heatran",
+            "moves": ["magmastorm", "earthpower", "flashcannon", "taunt"],
+        },
+        # Lower-tier / oddball opponents for robustness
+        {
+            "species": "sigilyph",
+            "moves": ["calmmind", "psychic", "airslash", "roost"],
+        },
+        {
+            "species": "drifblim",
+            "moves": ["calmmind", "shadowball", "airslash", "thunderbolt"],
+        },
+        {
+            "species": "zebstrika",
+            "moves": [
+                "wildcharge",
+                "flamecharge",
+                "highhorsepower",
+                "quickattack",
+            ],
+        },
+        {
+            "species": "beartic",
+            "moves": ["iciclecrash", "liquidation", "superpower", "aquajet"],
+        },
+        {
+            "species": "gigalith",
+            "moves": ["stealthrock", "stoneedge", "earthquake", "bodypress"],
+        },
+        {
+            "species": "tentacruel",
+            "moves": ["surf", "sludgewave", "icebeam", "acidspray"],
+        },
+        {
+            "species": "coalossal",
+            "moves": ["flamethrower", "powergem", "earthpower", "rapidspin"],
+        },
+        {
+            "species": "scovillain",
+            "moves": ["flamethrower", "energyball", "growth", "crunch"],
+        },
+    ]
     return (selected_opponents_pool,)
-
-
-@app.cell
-def _():
-    OpponentConfig = tuple[sdw.OpponentConfig, Callable, float]
-    return (OpponentConfig,)
-
-
-@app.cell
-def _(
-    Agent,
-    OpponentConfig,
-    heuristic_opponent_policy,
-    mlp_opponent_policy_factory,
-    opponent_policies,
-    selected_opponents_pool,
-):
-    def sample_adversaries(
-        n: int, rng, best_agent: Agent, population: list[Agent]
-    ) -> list[OpponentConfig]:
-        opponent_configs = []
-
-        for _ in range(n):
-            policy = rng.choice(
-                np.array(opponent_policies.keys()),
-                p=np.array([0.3, 0.3, 0.3, 0.1]),
-            )
-
-            opponent: sdw.OpponentConfig
-            if rng.random() < 0.2:
-                opponent = {"type": "random"}
-            else:
-                opponent = {
-                    "type": "specified",
-                    **selected_opponents_pool[
-                        int(rng.integers(len(selected_opponents_pool)))
-                    ],
-                }
-
-            match policy:
-                case OpponentAIType.RANDOM:
-                    policy_fn = random_opponent_policy
-                case OpponentAIType.HEURISTIC:
-                    policy_fn = heuristic_opponent_policy
-                case OpponentAIType.RANDOM_MLP:
-                    policy_fn = mlp_opponent_policy_factory(
-                        population[int(rng.integers(len(population)))].params
-                    )
-                case OpponentAIType.CHAMPION_MLP:
-                    policy_fn = mlp_opponent_policy_factory(best_agent.params)
-
-            opponent_configs.append(opponent, policy_fn, opponent_policies[policy])
-
-        return opponent_configs
-
-    return (sample_adversaries,)
 
 
 @app.cell(hide_code=True)
@@ -2718,8 +3428,7 @@ def _():
     $$
     where $\mathbb I$ is the indicator function.
 
-    The model will battle against various opponents with various degrees of difficulty.
-    The total fitness will be the sum of the fitness scores of each battle.
+    The total fitness will be the scaled sum of the fitness scores of each battle.
     """)
     return
 
@@ -2728,21 +3437,32 @@ def _():
 def compute_fitnesses(
     battle_results: list[sdw.BattleResult], n_adversaries: int
 ) -> list[float]:
-    n_agents = len(battle_results) / n_adversaries
+    if len(battle_results) % n_adversaries != 0:
+        raise ValueError("battle_results is not divisible by n_adversaries")
 
-    fitnesses = [0 for _ in range(n_agents)]
+    n_agents = len(battle_results) // n_adversaries
+
+    fitnesses = [0.0 for _ in range(n_agents)]
     for agent in range(n_agents):
         for adversary in range(n_adversaries):
             battle = battle_results[agent * n_adversaries + adversary]
             difficulty_multiplier = battle.userdata
+
+            if battle.winner == -1:
+                # Invalid battle
+
+                # fitnesses[agent] -= 1.0 / n_adversaries
+                continue
 
             fitnesses[agent] += (
                 (difficulty_multiplier if battle.winner == 0 else 0)
                 + (
                     0.25
                     * (
-                        battle.player_hp / battle.player0.pokemon["stats"]["hp"]
-                        - battle.opponent_hp / battle.player1.pokemon["stats"]["hp"]
+                        battle.player_hp
+                        / battle.player0.pokemon["stats"]["hp"]
+                        - battle.opponent_hp
+                        / battle.player1.pokemon["stats"]["hp"]
                     )
                 )
                 - 0.05 * battle.turns
@@ -2754,18 +3474,34 @@ def compute_fitnesses(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Algorithm
+    ## The Actual Algorithm
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Helpers
     """)
     return
 
 
 @app.cell
-def _(Agent, a):
+def _(Agent):
     def save_state(path: Path, population: list[Agent], rng, metadata):
+        path.mkdir(parents=True, exist_ok=True)
+
         for i, agent in enumerate(population):
-            a.save(path / f"agent_{i:04d}.npz")
+            agent.save(path / f"agent_{i:04d}.npz")
+
+        metadata = {
+            **metadata,
+            "rng_state": rng.bit_generator.state,
+        }
+
         with open(path / "metadata.json", "w") as f:
-            f.write(json.dumps(metadata))
+            json.dump(metadata, f)
 
     return (save_state,)
 
@@ -2774,8 +3510,16 @@ def _(Agent, a):
 def _(Agent):
     def select_survivors(
         candidates: list[Agent], mu: int, tournament_size: int, rng
-    ) -> list[Agent]:
-        pass
+    ):
+        survivors = []
+        n = len(candidates)
+
+        for _ in range(mu):
+            ids = rng.choice(n, size=tournament_size, replace=False)
+            tournament = [candidates[i] for i in ids]
+            survivors.append(max(tournament, key=lambda a: a.fitness).copy())
+
+        return survivors
 
     return (select_survivors,)
 
@@ -2788,8 +3532,13 @@ def _(Agent, OpponentConfig, genome_stats_to_integer, moves_df, types_unique):
         battle_configs = []
 
         for agent in population:
-            types_str = [types_unique[i] for i in set(agent.types)]
-            move_ids = [moves_df.iloc[i, "move_identifier"] for i in agent.moves]
+            t1, t2 = agent.types
+            types_str = (
+                [types_unique[t1]]
+                if t1 == t2
+                else [types_unique[t1], types_unique[t2]]
+            )
+            move_ids = moves_df.iloc[agent.moves]["move_identifier"].tolist()
             ai = {
                 "species": "Evolvemon",
                 "types": types_str,
@@ -2802,37 +3551,53 @@ def _(Agent, OpponentConfig, genome_stats_to_integer, moves_df, types_unique):
                     sdw.BattleConfig(
                         ai,
                         opponent[0],
-                        seed=rng.integers(),
-                        move_selector=opponent[1],
+                        seed=int(rng.integers(0, 2**32 - 1)),
+                        move_selector=agent.get_decision_function(
+                            opponent[1], rng
+                        ),
                         userdata=opponent[2],
                     )
                 )
+
+        return battle_configs
 
     return (get_battle_config,)
 
 
 @app.cell
-def _(Agent, get_battle_config, n_adversaries, showdown_worker_pool):
-    def evaluate_population(population: list[Agent], adversaries):
-        battle_configs = get_battle_config(population, adversaries)
+def _(Agent, OpponentConfig, get_battle_config):
+    def evaluate_population(
+        population: list[Agent],
+        adversaries: list[OpponentConfig],
+        rng,
+        showdown_worker_pool: sdw.ShowdownPool,
+    ):
+        battle_configs = get_battle_config(population, adversaries, rng)
         battle_results = showdown_worker_pool.run_battles(battle_configs)
-        fitnesses, eval_infos = compute_fitnesses(battle_results, n_adversaries)
+        fitnesses = compute_fitnesses(battle_results, len(adversaries))
 
-        for agent, fitness, eval_info in zip(population, fitnesses, eval_infos):
+        for agent, fitness in zip(population, fitnesses):
             agent.fitness = fitness
-            agent.eval_info = eval_info
 
     return (evaluate_population,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Main Loop
+
+    The main loop implements a $\lambda\mu$ strategy which evaluates parents and offspring together and chooses the next generation using a tounrament selection on the population of previous parents and the current offspring.
+    """)
+    return
 
 
 @app.cell
 def _(
     Agent,
-    checkpoint_path,
     evaluate_population,
     init_agent_at_random,
     make_offspring,
-    n_evaluated,
     sample_adversaries,
     save_state,
     seed,
@@ -2845,29 +3610,26 @@ def _(
         lambda_: int = 60,
         max_gens: int = 500,
         crossover_p: float = 0.25,
-        mut_p: float = 0.9,
         tournament_size=3,
         n_adversaries=12,
         checkpoints_path: str | Path = "checkpoints",
         checkpoint_every: int = 5,
     ):
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(seed + 2)
 
-        checkpoints_path = Path(checkpoint_path)
+        checkpoints_path = Path(checkpoints_path)
+        checkpoints_path.mkdir(parents=True, exist_ok=True)
 
-        id = 0
-        for path in checkpoints_path.iterdir():
-            if not path.is_dir():
-                continue
+        run_ids = [
+            int(p.name)
+            for p in checkpoints_path.iterdir()
+            if p.is_dir() and p.name.isdigit()
+        ]
+        run_id = (max(run_ids) + 1) if run_ids else 0
+        checkpoints_path = checkpoints_path / f"{run_id:04d}"
+        checkpoints_path.mkdir(parents=True, exist_ok=True)
 
-            try:
-                id = max(id, int(path))
-            except ValueError:
-                continue
-
-        checkpoints_path /= f"{id:04d}"
-
-        logbook = {}
+        logbook = []
 
         population = [init_agent_at_random(rng) for _ in range(mu)]
 
@@ -2876,8 +3638,10 @@ def _(
 
         tqdm_bar = tqdm(range(max_gens), unit="gen")
         for gen in tqdm_bar:
-            adversaries = sample_adversaries(n_adversaries, rng)
-            evaluate_population(population, adversaries)
+            adversaries = sample_adversaries(
+                n_adversaries, rng, best_agent, population
+            )
+            evaluate_population(population, adversaries, rng, showdown_worker_pool)
 
             generation_best = max(population, key=lambda a: a.fitness)
             generation_mean = float(np.mean([a.fitness for a in population]))
@@ -2891,7 +3655,6 @@ def _(
 
             record = {
                 "generation": gen,
-                "n_evaluated": n_evaluated,
                 "min": generation_min,
                 "mean": generation_mean,
                 "std": generation_std,
@@ -2905,7 +3668,7 @@ def _(
                     "mean": generation_mean,
                     "std": generation_std,
                     "max": generation_max,
-                    "gen_best": generation_best.fitness,
+                    "all_time_best": best_agent.fitness,
                 }
             )
 
@@ -2924,9 +3687,9 @@ def _(
                     {"logbook": logbook, "best_agent_fitness": best_agent.fitness},
                 )
 
-            offspring = make_offspring(lambda_, population, rng, crossover_p, mut_p)
+            offspring = make_offspring(lambda_, population, rng, crossover_p)
 
-            evaluate_population(offspring, adversaries)
+            evaluate_population(offspring, adversaries, rng, showdown_worker_pool)
 
             population = select_survivors(
                 population + offspring, mu, tournament_size, rng
@@ -2934,6 +3697,58 @@ def _(
 
         return best_agent, best_agents_per_gen, logbook
 
+    return (run,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Running it!
+
+    This cell takes forever to run.
+
+    Evolution time was also a big contraint: the main issue is that because of the language barrier across the model (Python) and the evaluator (NodeJS) I was unable to parallelize evaluation as much as I wanted.
+
+    A future developement for this project could be to move the whole evaluation logic in NodeJS, moving the decision-making code to JavaScript in order to avoid the back and forth beetween the two languages.
+    """)
+    return
+
+
+@app.cell
+def _(run):
+    def run_with_showdown():
+        with sdw.ShowdownPool(max_size=8) as showdown_pool:
+            return run(showdown_pool, n_adversaries=20, max_gens=1000)
+
+
+    best_agent, best_agents_per_gen, logbook = run_with_showdown()
+    return (best_agent,)
+
+
+@app.cell
+def _(best_agent, get_battle_config, rng, sample_adversaries):
+    battle_count = 1000
+    adversaries = sample_adversaries(battle_count, rng, best_agent, [best_agent])
+
+    battle_configs = get_battle_config([best_agent], adversaries, rng)
+
+    with sdw.ShowdownPool(max_size=8) as showdown_pool:
+        results = showdown_pool.run_battles(battle_configs)
+
+    battles_won = 0
+    for result in results:
+        if result.winner == 0:
+            battles_won += 1
+
+    print(f"The best agent won {battles_won} out of {battle_count}")
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    # Conclusions
+    """)
     return
 
 

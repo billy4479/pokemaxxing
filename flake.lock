@@ -44,11 +44,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1779713710,
-        "narHash": "sha256-uckX62njKM5nwS0ziREH7QUK0HKGud6f+v4e0dEQlNY=",
+        "lastModified": 1779741869,
+        "narHash": "sha256-qWIggurm7owT6MNfJmKE/cqn+hieGNN6Zb4/2bEgSm0=",
         "owner": "billy4479",
         "repo": "pokemon-showdown-wrapper",
-        "rev": "c283347fc66ca98114565096d61a11b4fe4e57a3",
+        "rev": "b5299d9ebb6fa336380285f1d22c7637b3757035",
         "type": "github"
       },
       "original": {
