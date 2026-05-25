@@ -1,12 +1,17 @@
 import marimo
 
 __generated_with = "0.21.1"
-app = marimo.App(width="full")
+app = marimo.App(
+    width="full",
+    css_file="/home/billy/Downloads/catppuccin-latte-frappe.css",
+)
 
 with app.setup:
+    from dataclasses import dataclass
+    from enum import Enum
     from functools import lru_cache
     from pathlib import Path
-    from dataclasses import dataclass
+    from typing import Any
 
     import marimo as mo
     import matplotlib.pyplot as plt
@@ -14,9 +19,16 @@ with app.setup:
     import pandas as pd
     import showdown_wrapper as sdw
     import torch
+    from deap import base, creator, tools
+    from scipy.spatial.distance import cdist
+    from scipy.special import softmax
     from sklearn.cluster import KMeans
     from sklearn.decomposition import PCA
-    from sklearn.metrics import precision_recall_fscore_support, silhouette_score
+    from sklearn.metrics import (
+        pairwise_distances,
+        precision_recall_fscore_support,
+        silhouette_score,
+    )
     from sklearn.preprocessing import StandardScaler
     from torch import nn
     from torch.nn import functional as F
@@ -58,7 +70,13 @@ def _():
 def _():
     mo.md(r"""
     # PokéMaxxing - What is the ideal Pokémon?
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
     Pokémon is a very famous game where two players let their pokémon fight in battles.
     The dynamics of the battles are quite complex and each player has to choose their strategy carefully before going into a battle.
 
@@ -218,8 +236,7 @@ def _(moves_df):
     numeric_cols = [
         col
         for col in moves_df.columns
-        if col
-        not in metadata_cols + categorical_cols + flag_cols + stat_change_cols
+        if col not in metadata_cols + categorical_cols + flag_cols + stat_change_cols
         and pd.api.types.is_numeric_dtype(moves_df[col])
     ]
 
@@ -244,9 +261,7 @@ def _(moves_df, numeric_cols):
     numeric_df = moves_df[numeric_cols].astype(np.float32)
     numeric_mean = numeric_df.mean(axis=0)
     numeric_std = numeric_df.std(axis=0, ddof=0).replace(0.0, 1.0)
-    numeric_scaled_df = ((numeric_df - numeric_mean) / numeric_std).astype(
-        np.float32
-    )
+    numeric_scaled_df = ((numeric_df - numeric_mean) / numeric_std).astype(np.float32)
     return (numeric_scaled_df,)
 
 
@@ -317,9 +332,7 @@ def _(
 
     assert start == feature_df.shape[1]
 
-    column_to_index = {
-        column: index for index, column in enumerate(feature_df.columns)
-    }
+    column_to_index = {column: index for index, column in enumerate(feature_df.columns)}
 
     categorical_feature_groups = {}
     for categorical_col in categorical_cols:
@@ -344,8 +357,7 @@ def _(
 
     {
         "feature_groups": {
-            group_name: group["size"]
-            for group_name, group in feature_groups.items()
+            group_name: group["size"] for group_name, group in feature_groups.items()
         },
         "categorical_feature_groups": {
             group_name: group["size"]
@@ -408,10 +420,8 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             _reconstruction_logits = self.decode(_latent)
             return _reconstruction_logits, _latent
 
-
     def _zero_like_loss(inputs):
         return inputs.sum() * 0.0
-
 
     def _mse_group_loss(reconstruction_logits, inputs, group_name):
         group_slice = feature_groups[group_name]["slice"]
@@ -425,7 +435,6 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             reduction="mean",
         )
 
-
     def _bce_group_loss(reconstruction_logits, inputs, group_name):
         group_slice = feature_groups[group_name]["slice"]
 
@@ -437,7 +446,6 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             inputs[:, group_slice],
             reduction="mean",
         )
-
 
     def _categorical_grouped_cross_entropy_loss(reconstruction_logits, inputs):
         categorical_losses = []
@@ -463,7 +471,6 @@ def _(categorical_feature_groups, feature_groups, group_loss_weights):
             return _zero_like_loss(inputs)
 
         return torch.stack(categorical_losses).mean()
-
 
     def ae_loss(
         reconstruction_logits,
@@ -610,8 +617,7 @@ def _(MoveAutoencoder, ae_loss, device):
                 history_row = {
                     "epoch": epoch,
                     **{
-                        key: value / dataset_size
-                        for key, value in epoch_totals.items()
+                        key: value / dataset_size for key, value in epoch_totals.items()
                     },
                 }
 
@@ -634,9 +640,7 @@ def _(MoveAutoencoder, ae_loss, device):
             reconstruction_logits_eval = model.decode(latent_embedding)
 
         embedding_matrix = latent_embedding.detach().cpu().numpy()
-        reconstruction_logits_matrix = (
-            reconstruction_logits_eval.detach().cpu().numpy()
-        )
+        reconstruction_logits_matrix = reconstruction_logits_eval.detach().cpu().numpy()
 
         return (
             model,
@@ -682,15 +686,10 @@ def _(device, training_history):
             "final_loss": float(final_training_row["loss"]),
             "best_loss": float(training_history["loss"].min()),
             "final_recon_numeric": float(final_training_row["recon_numeric"]),
-            "final_recon_stat_change": float(
-                final_training_row["recon_stat_change"]
-            ),
-            "final_recon_categorical": float(
-                final_training_row["recon_categorical"]
-            ),
+            "final_recon_stat_change": float(final_training_row["recon_stat_change"]),
+            "final_recon_categorical": float(final_training_row["recon_categorical"]),
             "final_recon_flags": float(final_training_row["recon_flags"]),
         }
-
 
     get_training_summary()
     return
@@ -748,7 +747,6 @@ def _(training_history):
         fig.tight_layout()
         return fig
 
-
     plot_training()
     return
 
@@ -804,7 +802,6 @@ def _(
         index=feature_df.index,
     )
 
-
     def _safe_binary_metrics(y_true, y_pred):
         precision, recall, f1, support = precision_recall_fscore_support(
             y_true.reshape(-1),
@@ -822,7 +819,6 @@ def _(
             "f1": float(f1),
             "support": int(y_true.sum()),
         }
-
 
     def evaluate_numeric_group(group_name):
         group_slice = feature_groups[group_name]["slice"]
@@ -847,7 +843,6 @@ def _(
         ).sort_values("mae", ascending=False)
 
         return summary, per_column
-
 
     def evaluate_categorical_groups():
         rows = []
@@ -886,15 +881,12 @@ def _(
 
         return summary, per_categorical
 
-
     def evaluate_binary_group(group_name):
         group_slice = feature_groups[group_name]["slice"]
         group_columns = feature_groups[group_name]["columns"]
 
         y_true = feature_df.iloc[:, group_slice].to_numpy().astype(bool)
-        y_pred = (
-            reconstruction_probability_df.iloc[:, group_slice].to_numpy() >= 0.5
-        )
+        y_pred = reconstruction_probability_df.iloc[:, group_slice].to_numpy() >= 0.5
 
         micro = _safe_binary_metrics(y_true, y_pred)
 
@@ -1148,18 +1140,14 @@ def _(seed):
 
 
 @app.function
-def plot_umap_pca_2d(
-    umap, pca, labels, get_mask, title, legend_title="", legend=True
-):
+def plot_umap_pca_2d(umap, pca, labels, get_mask, title, legend_title="", legend=True):
     fig, (ax1, ax2) = plt.subplots(1, 2)
 
     fig.suptitle(title)
     fig.tight_layout()
 
     cmap = plt.get_cmap("tab20")
-    colors_per_label = {
-        label: cmap(i % cmap.N) for i, label in enumerate(labels)
-    }
+    colors_per_label = {label: cmap(i % cmap.N) for i, label in enumerate(labels)}
 
     def scatter(ax, data):
         ax.grid(alpha=0.25)
@@ -1206,7 +1194,7 @@ def _(moves_df, pca, umap):
         "2D Embeddings colored by type",
         "type",
     )
-    return
+    return (types_unique,)
 
 
 @app.cell
@@ -1368,27 +1356,23 @@ def _(embedding_matrix, metadata_cols, moves_df):
 def _():
     mo.md(r"""
     # Evolution
+    """)
+    return
 
-    ## Fitness
 
-    The fitness will be computed using this formula
-    $$
-    \begin{align*}
-    \text{fitness for 1 battle} = &\, 3000 \cdot \mathbb I(\text{battle won}) \\
-    & + 100 \cdot \text{own remaining HP} \\
-    & - 100 \cdot \text{opponent remaining HP} \\
-    & - 50  \cdot \text{number of turns}
-    \end{align*}
-    $$
-    where $\mathbb I$ is the indicator function.
-
-    The model will battle against various opponents with various degrees of difficulty.
-    The total fitness will be the sum of the fitness scores of each battle.
-
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
     ## Battle MLP
 
     This is the model which will take a decision on which move to play.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
     ### Inputs and Preprocessing
 
     | **What** |  **Size** | **Notes** |
@@ -1396,13 +1380,16 @@ def _():
     | Moveset (own)| $4 \times 8$ dense vector | Vectors from the latent space of the AE |
     | Current PP (own) | $4$ integers | |
     | Move effectiveness score (own) | $4$ dense vector | The $\log_2$ of the multiplier due to the types of the pokemons and the moves |
-    | Statistics (own) | $8$ integers | Boosts already applied, includes max HP |
+    | Base Statistics (own) | $8$ dense vector | Normalized value of each stat |
+    | Boosts (own) | $8$ dense vector | $\log_2$ of the multiplier each boost level gives |
     | Current HP (both) | $2$ integers | |
     | Weather and Terrain | $4 \times 2$ one-hot | |
     | Major status (both) | $7 \times 2$ one-hot | |
     | Volatile status (both) | $4 \times 2$ dense vectors | Precomputed approximation of what each status does |
     | Side conditions (both) | $3 \times 2$ dense vectors | Precomputed approximation of what each side condition does |
     | Turn number | $1$ integer | |
+
+    This gives exactly `90` input dimensions.
     """)
     return
 
@@ -1594,7 +1581,6 @@ def _():
 
         return np.log2(multiplier)
 
-
     def map_type_to_score(
         own_type: list[str],
         opp_type: list[str],
@@ -1622,7 +1608,6 @@ def _():
 
         probabilities = np.clip(probabilities, 0.0, 1.0)
         return float(1.0 - np.prod(1.0 - probabilities))
-
 
     ACTION_DENIAL_EFFECTS: dict[str, float] = {
         # Guaranteed loss of action.
@@ -1700,15 +1685,10 @@ def _():
         "endure": 0.5,
     }
 
-
     # Output order: [action_denial, move_restriction, hp_drift, protection]
     def compute_volatile_status_summary(statuses: list[str]) -> np.ndarray:
         action_denial_probs = np.array(
-            [
-                ACTION_DENIAL_EFFECTS[s]
-                for s in statuses
-                if s in ACTION_DENIAL_EFFECTS
-            ],
+            [ACTION_DENIAL_EFFECTS[s] for s in statuses if s in ACTION_DENIAL_EFFECTS],
             dtype=np.float32,
         )
 
@@ -1729,9 +1709,7 @@ def _():
         )
 
         action_denial = _combine_independent_probabilities(action_denial_probs)
-        move_restriction = _combine_independent_probabilities(
-            move_restriction_values
-        )
+        move_restriction = _combine_independent_probabilities(move_restriction_values)
 
         hp_drift = np.clip(hp_drift_raw / 0.25, -1.0, 1.0)
 
@@ -1772,7 +1750,6 @@ def _():
         "mist": 0.25,
         "luckychant": 0.25,
     }
-
 
     #  Output order: [defensive_screen, speed_support, status_protection]
     def compute_side_condition_summary(conditions: list[str]) -> np.ndarray:
@@ -1818,14 +1795,10 @@ def _():
     }
     all_major_statuses = {"brn", "par", "slp", "frz", "psn", "tox"}
 
-
     def make_onehot_map(all_states: set[str]) -> dict[str, np.ndarray]:
-        encoding_map = {
-            v: np.eye(len(all_states))[i] for i, v in enumerate(all_states)
-        }
+        encoding_map = {v: np.eye(len(all_states))[i] for i, v in enumerate(all_states)}
         encoding_map[""] = np.zeros(len(all_states))
         return encoding_map
-
 
     weathers_encoding_map = make_onehot_map(all_weathers)
     terrains_encoding_map = make_onehot_map(all_terrains)
@@ -1851,6 +1824,7 @@ def compute_boost_score(boost: int) -> float:
 
 @app.cell
 def _(
+    STAT_MAX,
     compute_side_condition_summary,
     compute_volatile_status_summary,
     major_statuses_encoding_map,
@@ -1882,11 +1856,8 @@ def _(
                     )
                     for move_id in move_ids_0
                 ],
-                list(p0.pokemon["stats"].values()),
-                [
-                    compute_boost_score(boost)
-                    for boost in p0.pokemon["boosts"].values()
-                ],
+                [v / STAT_MAX[k] for k, v in p0.pokemon["stats"].items()],
+                [compute_boost_score(boost) for boost in p0.pokemon["boosts"].values()],
                 [p0.pokemon["hp"], p1.pokemon["hp"]],
                 weathers_encoding_map[p0.weather],
                 terrains_encoding_map[p0.terrain],
@@ -1904,17 +1875,110 @@ def _(
     return (compute_input_to_mlp,)
 
 
-@app.function
-def mlp_forward_pass(inputs: np.ndarray, weights: np.ndarray) -> int:
-    print(inputs.shape)
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Layout and Forward Pass
 
-    return 0
+    The MLP will be tiny, for the initialial experimentation I picked `90 -> 16 -> 8 -> 4` where the outputs will be the logits of picking each move.
+    I chose `tanh` as activation function as it bounds post-activation values to $(-1, 1)$ making the MLP less sensitive to high weights.
+    """)
+    return
+
+
+@app.cell
+def _():
+    MLPParamsSlices = list[tuple[tuple[int, int], tuple[int, int]]]
+    return (MLPParamsSlices,)
+
+
+@app.cell
+def _(MLPParamSlices, MLPParamsSlices):
+    def compute_slices(layers: list[int]) -> MLPParamsSlices:
+        cursor_w = 0
+        cursor_b = 0
+        params_slices: MLPParamSlices = []
+        for i, input_size in enumerate(layers[:-1]):
+            output_size = layers[i + 1]
+
+            start_w = cursor_w
+            start_b = cursor_b
+
+            cursor_w += input_size * output_size
+            cursor_b += output_size
+
+            params_slices.append(((start_w, cursor_w), (start_b, cursor_b)))
+
+        return params_slices
+
+    def count_params(slices: MLPParamsSlices) -> int:
+        return slices[-1][0][1] + slices[-1][1][1]
+
+    return compute_slices, count_params
+
+
+@app.cell
+def _(compute_slices, count_params):
+    MLP_LAYOUT = [90, 16, 8, 4]
+    MLP_SLICES = compute_slices(MLP_LAYOUT)
+
+    count_params(MLP_SLICES)
+    return MLP_LAYOUT, MLP_SLICES
+
+
+@app.cell
+def _(MLP_SLICES):
+    MLP_SLICES[0]
+    return
+
+
+@app.cell
+def _(MLP_LAYOUT, MLP_SLICES):
+    def get_params_view(params: np.ndarray, layer: int):
+        slice = MLP_SLICES[layer]
+        w = params[slice[0][0] : slice[0][1]].reshape(
+            MLP_LAYOUT[layer], MLP_LAYOUT[layer + 1]
+        )
+        b = params[slice[1][0] : slice[1][1]]
+
+        assert np.shares_memory(w, params)
+        assert np.shares_memory(b, params)
+
+        return w, b
+
+    return (get_params_view,)
+
+
+@app.cell
+def _(MLP_LAYOUT, get_view):
+    def mlp_forward(input: np.ndarray, params: np.ndarray) -> int:
+        current = input
+
+        for i in range(len(MLP_LAYOUT) - 2):
+            w, b = get_view(params, i)
+            current = np.tanh(current @ w + b)
+
+        w, b = get_view(params, len(MLP_LAYOUT) - 2)
+        current = current @ w + b
+
+        return np.argmax(current)
+
+    return (mlp_forward,)
 
 
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ### Running battles
+    ## Defining the Agents
+
+    We define the genome of each agent as follows:
+    - `params` for the MLP, this is a flat vector which will then be sliced by looking at `MLP_SLICES`.
+    - `stats` as importance scores, i.e. logits of the fraction of available stat budget.
+    - `moves` is the array of the move ids.
+    - `types` is a tuple of integer indicating the type(s).
+    - `log_sigmas` is an array with one value per MLP layer which will control the variance of the mutation of the parameters of that layer. There will be one for weights and one for biases (so in this case $3 \times 2 = 6$).
+
+    Note that the representation for the genotype is different than what will be fed to the MLP (the fenotype).
     """)
     return
 
@@ -1932,111 +1996,517 @@ def _():
     }
     STATS_TOTAL_MAX = 600
 
-
-    def validate_stats(stats: sdw.Stats) -> bool:
-        return (
-            all(value <= STAT_MAX[key] for key, value in stats.items())
-            and sum(stats.values()) <= STATS_TOTAL_MAX
-            and all(value >= STAT_MIN for value in stats.values())
-        )
+    STAT_MAX_LIST = list(STAT_MAX.values())
+    STAT_KEYS = list(STAT_MAX.keys())
+    return STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN
 
 
-    def random_valid_stats() -> sdw.Stats:
-        stats = {k: STAT_MIN for k in STAT_MAX}
-        remaining = STATS_TOTAL_MAX - sum(stats.values())  # 600 - 180 = 420
-
-        while remaining > 0:
-            keys = list(STAT_MAX.keys())
-            np.random.shuffle(keys)
-
-            for k in keys:
-                if STAT_MAX[k] - stats[k] < 1:
-                    continue
-                if remaining == 0:
-                    break
-
-                add = np.random.randint(1, min(remaining, STAT_MAX[k] - stats[k])+1)
-                stats[k] += add
-                remaining -= add
-
-        return stats
-
-    return (random_valid_stats,)
+@app.class_definition
+class OpponentAIType(Enum):
+    RANDOM = 1
+    MAX_DAMAGE = 2
+    SAME_MLP = 100
+    MLP_FROM_PARAMS = 101
 
 
 @app.cell
-def _(metadata_cols, move_embeddings_df, moves_df, random_valid_stats, rng):
+def _(compute_input_to_mlp, mlp_forward, moves_df, rng):
     @dataclass
     class Agent:
-        layers: list[tuple[np.ndarray, np.ndarray]]
-        stats: sdw.Stats
-        moves: list[str]
-        types: tuple[str, str]
+        params: np.ndarray
+        stats: np.ndarray
+        moves: np.ndarray
+        types: tuple[int, int]
+        log_sigmas: np.ndarray
 
-        @classmethod
-        def random_init(cls, layer_sizes: list[int]) -> "Agent":
-            params = []
-
-            for fan_in, fan_out in zip(layer_sizes[:-1], layer_sizes[1:]):
-                # He normal initialization
-                std = np.sqrt(2.0 / fan_in)
-
-                W = rng.normal(loc=0.0, scale=std, size=(fan_in, fan_out))
-
-                b = np.zeros((1, fan_out))
-
-                params.append((W, b))
-
-            stats = random_valid_stats()
-
-            all_types = moves_df["type"].unique()
-            types = (
-                all_types[rng.integers(len(all_types))],
-                all_types[rng.integers(len(all_types))]
-            )
-
-            moves = []
-            moves.append(
-                move_embeddings_df.iloc[rng.integers(len(move_embeddings_df))]
-                .drop(metadata_cols)
-                .to_numpy(dtype=np.float32)
-            )
-
-            return cls(params, stats, moves, types)
-
-        def count_mlp_params(self) -> int:
-            total = 0
-            for layer in self.layers:
-                total += (
-                    layer[0].shape[0] * layer[0].shape[1]
-                    + layer[1].shape[0] * layer[1].shape[1]
-                )
-
-            return total
-
-        def get_decision_function(self) -> sdw.MoveSelector:
+        def get_decision_function(
+            self, opponent_ai_type: OpponentAIType, userdata: Any | None = None
+        ) -> sdw.MoveSelector:
             def decider(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
-                print(self.moves)
-                return 0, 0
+                input = compute_input_to_mlp(p0, p1)
+                ai_move = mlp_forward(input, self.layers)
+
+                match opponent_ai_type:
+                    case OpponentAIType.RANDOM:
+                        opponent_move = rng.integers(4)
+                    case OpponentAIType.MAX_DAMAGE:
+                        opponent_move = np.argmax(
+                            [
+                                moves_df.loc[
+                                    moves_df["move_identifier"] == slot.id, "power"
+                                ].iloc[0]
+                                for slot in p1.slots
+                            ]
+                        )
+                    case OpponentAIType.SAME_MLP:
+                        opponent_move = mlp_forward(
+                            compute_input_to_mlp(p1, p0), self.params
+                        )
+                    case OpponentAIType.MLP_FROM_PARAMS:
+                        opponent_move = mlp_forward(
+                            compute_input_to_mlp(p1, p0), userdata
+                        )
+
+                return ai_move, opponent_move
 
             return decider
+
+        def copy(self) -> "Agent":
+            return Agent(
+                self.params.copy(),
+                self.stats.copy(),
+                self.moves.copy(),
+                self.types,
+                self.log_sigmas.copy(),
+            )
+
+        def __repr__(self) -> str:
+            return (
+                "Agent(\n"
+                f"  params={np.array2string(self.params, precision=3, suppress_small=True)},\n"
+                f"  stats={np.array2string(self.stats, precision=3, suppress_small=True)},\n"
+                f"  moves={np.array2string(self.moves, precision=3, suppress_small=True)},\n"
+                f"  types={self.types},\n"
+                f"  log_sigmas={np.array2string(self.log_sigmas, precision=3, suppress_small=True)}\n"
+                ")"
+            )
 
     return (Agent,)
 
 
-@app.cell
-def _(Agent):
-    Agent.random_init([90, 32, 16, 4]).get_decision_function()(None, None)
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Initialization
+
+    - Stats can just be initialized with random numbers, since the function below will handle all cases and always output a legal distribution.
+    - Types can be chosen randomly within the existing ones.
+    - MLP weights are choses using Xavier Uniform initialization, since this is the recommended one when using `tanh` as activation function.
+    - The first move is sampled at random, then the next ones are chosen in order to maximize the distance in the latent space, so that the moveset will be heterogeneous.
+    """)
     return
 
 
 @app.cell
-def _(compute_input_to_mlp, seed):
+def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN, rng):
+    def validate_stats(stats: sdw.Stats) -> bool:
+        all_below_max = all(value <= STAT_MAX[key] for key, value in stats.items())
+        sum_below_max = sum(stats.values()) == STATS_TOTAL_MAX
+        all_above_min = all(value >= STAT_MIN for value in stats.values())
+
+        print(all_below_max, sum_below_max, all_above_min)
+
+        return all_below_max and sum_below_max and all_above_min
+
+    def genome_stats_to_integer(stats: np.ndarray) -> dict[str, int]:
+        stats01 = softmax(np.asarray(stats, dtype=float))
+
+        if len(stats01) != len(STAT_KEYS):
+            raise ValueError("stats01 and keys must have the same length")
+
+        stats01 = np.clip(stats01, 0.0, 1.0)
+
+        mins = np.array([STAT_MIN for _ in STAT_KEYS], dtype=int)
+        maxs = np.array([STAT_MAX[key] for key in STAT_KEYS], dtype=int)
+        caps = maxs - mins
+
+        min_total = int(mins.sum())
+        max_total = int(maxs.sum())
+
+        if STATS_TOTAL_MAX < min_total:
+            raise ValueError("STATS_TOTAL_MAX is below the sum of minimum stats")
+
+        if STATS_TOTAL_MAX > max_total:
+            raise ValueError("STATS_TOTAL_MAX is above the sum of maximum stats")
+
+        extra_budget = STATS_TOTAL_MAX - min_total
+
+        if extra_budget == 0:
+            return {key: int(value) for key, value in zip(STAT_KEYS, mins)}
+
+        # Preference for extra points.
+        # Multiplying by caps means that 1.0 represents "I want this stat near its own max".
+        weights = stats01 * caps
+
+        # If all normalized values are 0, there is no preference signal.
+        # Fall back to distributing by available capacity.
+        if weights.sum() == 0:
+            weights = caps.astype(float)
+
+        extras = np.zeros(len(STAT_KEYS), dtype=int)
+        remaining = extra_budget
+
+        active = caps > 0
+
+        while remaining > 0:
+            active_indices = np.where(active)[0]
+
+            if len(active_indices) == 0:
+                raise RuntimeError("No remaining capacity but budget is not exhausted")
+
+            active_weights = weights[active_indices]
+
+            if active_weights.sum() == 0:
+                active_weights = caps[active_indices].astype(float)
+
+            quotas = remaining * active_weights / active_weights.sum()
+
+            whole = np.floor(quotas).astype(int)
+
+            # Do not exceed remaining capacity for each stat.
+            available = caps[active_indices] - extras[active_indices]
+            whole = np.minimum(whole, available)
+
+            extras[active_indices] += whole
+            remaining -= int(whole.sum())
+
+            if remaining == 0:
+                break
+
+            # Largest remainder allocation, stable by original key order.
+            remainders = quotas - np.floor(quotas)
+
+            order = sorted(
+                active_indices,
+                key=lambda i: (-remainders[list(active_indices).index(i)], i),
+            )
+
+            allocated_any = False
+
+            for i in order:
+                if remaining == 0:
+                    break
+
+                if extras[i] < caps[i]:
+                    extras[i] += 1
+                    remaining -= 1
+                    allocated_any = True
+
+            if not allocated_any:
+                raise RuntimeError("Could not allocate remaining stat points")
+
+            active = extras < caps
+
+        values = mins + extras
+
+        return {key: int(value) for key, value in zip(STAT_KEYS, values)}
+
+    def random_valid_stats() -> np.ndarray:
+        return rng.random(len(STAT_KEYS))
+
+    return (random_valid_stats,)
+
+
+@app.function
+def xavier_uniform(fan_in, fan_out):
+    # Best for tanh
+    limit = np.sqrt(6 / (fan_in + fan_out))
+    return np.random.uniform(-limit, limit, (fan_in, fan_out))
+
+
+@app.cell
+def _(metadata_cols, move_embeddings_df, rng):
+    def pick_random_moveset():
+        k = 4
+        feature_cols = [c for c in move_embeddings_df.columns if c not in metadata_cols]
+
+        X = move_embeddings_df[feature_cols].to_numpy()
+
+        first = rng.integers(len(move_embeddings_df))
+
+        selected = [first]
+
+        min_dist = pairwise_distances(X, X[[first]]).ravel()
+
+        for _ in range(1, k):
+            next_idx = np.argmax(min_dist)
+            selected.append(next_idx)
+
+            new_dist = pairwise_distances(X, X[[next_idx]]).ravel()
+            min_dist = np.minimum(min_dist, new_dist)
+
+        return np.array(selected)
+        # , move_embeddings_df.iloc[selected]["move_identifier"].tolist()
+
+    return (pick_random_moveset,)
+
+
+@app.cell
+def _(
+    Agent,
+    MLP_LAYOUT,
+    pick_random_moveset,
+    random_valid_stats,
+    rng,
+    types_unique,
+):
+    def init_agent_at_random() -> Agent:
+        params_parts = []
+        for i, input_size in enumerate(MLP_LAYOUT[:-1]):
+            output_size = MLP_LAYOUT[i + 1]
+
+            W = xavier_uniform(input_size, output_size).flatten()
+            b = np.zeros(output_size)
+
+            params_parts.extend([W, b])
+
+        params = np.concatenate(params_parts)
+
+        stats = random_valid_stats()
+
+        types = (
+            rng.integers(len(types_unique), dtype=int),
+            rng.integers(len(types_unique), dtype=int),
+        )
+
+        moves = pick_random_moveset()
+
+        log_sigmas = np.log(
+            np.ones((len(MLP_LAYOUT) - 1) * 2) * 0.05
+        )  # initially set sigma = 0.05 for all layers
+
+        return Agent(params, stats, moves, types, log_sigmas)
+
+    return (init_agent_at_random,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Mutations
+    """)
+    return
+
+
+@app.cell
+def _(Agent):
+    def mutate_sigma(agent: Agent, tau=0.10):
+        LOG_SIGMA_MIN = np.log(1e-4)
+        LOG_SIGMA_MAX = np.log(0.5)
+
+        agent.log_sigmas = agent.log_sigmas.copy() + np.clip(
+            np.random.normal(0, tau, size=agent.log_sigmas.shape),
+            LOG_SIGMA_MIN,
+            LOG_SIGMA_MAX,
+        )
+
+        return agent
+
+    return (mutate_sigma,)
+
+
+@app.cell
+def _(Agent, MLP_LAYOUT, get_params_view):
+    def mutate_params(agent: Agent, indpb=0.05):
+        params = agent.params.copy()
+        sigmas = np.exp(agent.log_sigmas)
+
+        for layer in range(len(MLP_LAYOUT) - 1):
+            w, b = get_params_view(params, layer)
+            sigma_w = sigmas[layer * 2]
+            sigma_b = sigmas[layer * 2 + 1]
+
+            mask_w = np.random.random(w.shape) < indpb
+            mask_b = np.random.random(b.shape) < indpb
+
+            w[mask_w] += np.random.normal(0, sigma_w, size=mask_w.sum())
+            b[mask_b] += np.random.normal(0, sigma_b, size=mask_b.sum())
+
+            assert np.shares_memory(w, params)
+            assert np.shares_memory(b, params)
+
+        agent.params = np.clip(params, -5, 5)
+        return agent
+
+    return (mutate_params,)
+
+
+@app.cell
+def _(Agent, rng, types_unique):
+    def mutate_type(agent: Agent, p=0.25, p_collapse=0.05):
+        t1, t2 = agent.types
+
+        if np.random.random() < p:
+            t1 = rng.integers(len(types_unique))
+
+        if np.random.random() < p:
+            t2 = rng.integers(len(types_unique))
+
+        if np.random.random() < p_collapse:
+            if np.random.random() < 0.5:
+                t2 = t1
+            else:
+                t1 = t2
+
+        agent.types = (t1, t2)
+        return agent
+
+    return (mutate_type,)
+
+
+@app.cell
+def _(metadata_cols, move_embeddings_df):
+    SIGMA_MOVE_CHANGE = 0.5
+
+    _feature_cols = [c for c in move_embeddings_df.columns if c not in metadata_cols]
+
+    _X = move_embeddings_df[_feature_cols].to_numpy()
+
+    move_dist_matrix = cdist(_X, _X, metric="euclidean")
+    _logits = -(move_dist_matrix**2) / (2.0 * SIGMA_MOVE_CHANGE**2)
+    np.fill_diagonal(_logits, -np.inf)
+
+    move_local_change_p = softmax(_logits, axis=1)
+
+    #  pd.Series(move_local_change_p[5][move_local_change_p[5] > 0.01])
+    return (move_local_change_p,)
+
+
+@app.cell
+def _(Agent, move_embeddings_df, move_local_change_p, rng):
+    def mutate_moveset(agent: Agent, p_replace=0.25, p_jump=0.2):
+        moves = agent.moves.copy()
+
+        for i in range(len(moves)):
+            if np.random.random() < p_replace:
+                current = moves[i]
+
+                if np.random.random() > p_jump:
+                    probs = move_local_change_p[current]
+                    moves[i] = rng.choice(len(move_embeddings_df), p=probs)
+                else:
+                    moves[i] = rng.integers(len(move_embeddings_df))
+
+        agent.moves = moves
+        return agent
+
+    return (mutate_moveset,)
+
+
+@app.cell
+def _(Agent):
+    def mutate_stats(agent: Agent, sigma=0.1, indpb=0.5):
+        stats = agent.stats.copy()
+
+        mask = np.random.random(stats.shape) < indpb
+        stats[mask] += np.random.normal(0, sigma, size=mask.sum())
+
+        agent.stats = stats
+        return agent
+
+    return (mutate_stats,)
+
+
+@app.cell
+def _(
+    Agent,
+    mutate_moveset,
+    mutate_params,
+    mutate_sigma,
+    mutate_stats,
+    mutate_type,
+):
+    def mutate_all(agent: Agent):
+        if np.random.random() < 0.40:
+            mutate_moveset(agent)
+
+        if np.random.random() < 0.10:
+            mutate_type(agent)
+
+        if np.random.random() < 0.70:
+            mutate_stats(agent)
+
+        if np.random.random() < 0.8:
+            mutate_sigma(agent)
+
+        if np.random.random() < 0.95:
+            mutate_params(agent)
+
+        return agent
+
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Crossover
+    """)
+    return
+
+
+@app.cell
+def _(Agent, rng):
+    def mate(a: Agent, b: Agent):
+        # Moveset crossover
+        if np.random.random() < 0.5:
+            a.moves = a.moves.copy()
+            b.moves = b.moves.copy()
+
+            i = rng.integers(len(a.moves))
+            j = rng.integers(len(b.moves))
+
+            a.moves[i], b.moves[j] = b.moves[j], a.moves[i]
+
+        # Type crossover
+        if np.random.random() < 0.5:
+            i = 0 if np.random.random() < 0.5 else 1
+            j = 0 if np.random.random() < 0.5 else 1
+
+            t_a = (a.types[-(i - 1)], b.types[j])
+            t_b = (b.types[-(j - 1)], a.types[i])
+
+            a.types = t_a
+            b.types = t_b
+
+        # Stat crossover
+        if np.random.random() < 0.5:
+            alpha = np.random.random()
+            xa = a.stats.copy()
+            xb = b.stats.copy()
+            a.stats = alpha * xa + (1 - alpha) * xb
+            b.stats = alpha * xb + (1 - alpha) * xa
+
+        # MLP crossover
+        if np.random.random() < 0.2:
+            a.params, b.params = b.params.copy(), a.params.copy()
+
+        return a, b
+
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Algorithm
+    """)
+    return
+
+
+@app.cell
+def _(Agent, init_agent_at_random):
+    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    creator.create("Individual", Agent, fitness=creator.FitnessMax)
+
+    toolbox = base.Toolbox()
+
+    toolbox.register("individual", init_agent_at_random)
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(seed):
     def first_move_ai(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
-        mlp_input = compute_input_to_mlp(p0, p1)
+        print(p0)
 
         return (0, 0)
-
 
     ai = {
         "species": "Pikachu",
@@ -2087,6 +2557,28 @@ def _(compute_input_to_mlp, seed):
             f"Battle {i}: {r.winner} won in {r.turns} turns "
             f"(p0 HP: {r.player_hp}, p1 HP: {r.opponent_hp})"
         )
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Fitness
+
+    The fitness will be computed using this formula
+    $$
+    \begin{align*}
+    \text{fitness for 1 battle} = &\, 3000 \cdot \mathbb I(\text{battle won}) \\
+    & + 100 \cdot \text{own remaining HP} \\
+    & - 100 \cdot \text{opponent remaining HP} \\
+    & - 50  \cdot \text{number of turns}
+    \end{align*}
+    $$
+    where $\mathbb I$ is the indicator function.
+
+    The model will battle against various opponents with various degrees of difficulty.
+    The total fitness will be the sum of the fitness scores of each battle.
+    """)
     return
 
 

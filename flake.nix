@@ -35,6 +35,7 @@
             umap-learn
             scikit-learn
             plotly
+            deap
 
             jupyterlab
 
