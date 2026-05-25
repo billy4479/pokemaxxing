@@ -7,7 +7,9 @@ app = marimo.App(
 )
 
 with app.setup:
-    from dataclasses import dataclass
+    import json
+    from collections.abc import Callable
+    from dataclasses import dataclass, field
     from enum import Enum
     from functools import lru_cache
     from pathlib import Path
@@ -19,7 +21,6 @@ with app.setup:
     import pandas as pd
     import showdown_wrapper as sdw
     import torch
-    from deap import base, creator, tools
     from scipy.spatial.distance import cdist
     from scipy.special import softmax
     from sklearn.cluster import KMeans
@@ -2004,13 +2005,13 @@ def _():
 @app.class_definition
 class OpponentAIType(Enum):
     RANDOM = 1
-    MAX_DAMAGE = 2
-    SAME_MLP = 100
-    MLP_FROM_PARAMS = 101
+    HEURISTIC = 2
+    RANDOM_MLP = 100
+    CHAMPION_MLP = 101
 
 
 @app.cell
-def _(compute_input_to_mlp, mlp_forward, moves_df, rng):
+def _(compute_input_to_mlp, mlp_forward, shallow):
     @dataclass
     class Agent:
         params: np.ndarray
@@ -2019,50 +2020,58 @@ def _(compute_input_to_mlp, mlp_forward, moves_df, rng):
         types: tuple[int, int]
         log_sigmas: np.ndarray
 
+        fitness: float | None = None
+        eval_info: dict[str, Any] = field(default_factory=dict)
+
+        def invalidate_fitness(self) -> None:
+            self.fitness = None
+            self.eval_info.clear()
+
+        @property
+        def is_evaluated(self) -> bool:
+            return self.fitness is not None
+
         def get_decision_function(
-            self, opponent_ai_type: OpponentAIType, userdata: Any | None = None
+            self,
+            opponent_policy: Callable[[sdw.PlayerState, sdw.PlayerState], int],
         ) -> sdw.MoveSelector:
             def decider(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
                 input = compute_input_to_mlp(p0, p1)
-                ai_move = mlp_forward(input, self.layers)
-
-                match opponent_ai_type:
-                    case OpponentAIType.RANDOM:
-                        opponent_move = rng.integers(4)
-                    case OpponentAIType.MAX_DAMAGE:
-                        opponent_move = np.argmax(
-                            [
-                                moves_df.loc[
-                                    moves_df["move_identifier"] == slot.id, "power"
-                                ].iloc[0]
-                                for slot in p1.slots
-                            ]
-                        )
-                    case OpponentAIType.SAME_MLP:
-                        opponent_move = mlp_forward(
-                            compute_input_to_mlp(p1, p0), self.params
-                        )
-                    case OpponentAIType.MLP_FROM_PARAMS:
-                        opponent_move = mlp_forward(
-                            compute_input_to_mlp(p1, p0), userdata
-                        )
+                ai_move = mlp_forward(input, self.params)
+                opponent_move = opponent_policy(p0, p1)
 
                 return ai_move, opponent_move
 
             return decider
 
-        def copy(self) -> "Agent":
-            return Agent(
-                self.params.copy(),
-                self.stats.copy(),
-                self.moves.copy(),
-                self.types,
-                self.log_sigmas.copy(),
-            )
+        def copy(self, copy_fitness=True, deep=True) -> "Agent":
+            if deep:
+                copy = Agent(
+                    self.params.copy(),
+                    self.stats.copy(),
+                    self.moves.copy(),
+                    self.types,
+                    self.log_sigmas.copy(),
+                )
+            if shallow:
+                copy = Agent(
+                    self.params,
+                    self.stats,
+                    self.moves,
+                    self.types,
+                    self.log_sigmas,
+                )
+
+            if copy_fitness:
+                copy.fitness = self.fitness
+                copy.eval_info = dict(self.eval_info)
+
+            return copy
 
         def __repr__(self) -> str:
             return (
                 "Agent(\n"
+                f"  fitness={self.fitness},\n"
                 f"  params={np.array2string(self.params, precision=3, suppress_small=True)},\n"
                 f"  stats={np.array2string(self.stats, precision=3, suppress_small=True)},\n"
                 f"  moves={np.array2string(self.moves, precision=3, suppress_small=True)},\n"
@@ -2070,6 +2079,43 @@ def _(compute_input_to_mlp, mlp_forward, moves_df, rng):
                 f"  log_sigmas={np.array2string(self.log_sigmas, precision=3, suppress_small=True)}\n"
                 ")"
             )
+
+        def save(self, path: str | Path) -> None:
+            path = Path(path)
+
+            metadata = {
+                "types": list(self.types),
+                "fitness": self.fitness,
+                "eval_info": self.eval_info,
+            }
+
+            np.savez_compressed(
+                path,
+                params=self.params,
+                stats=self.stats,
+                moves=self.moves,
+                log_sigmas=self.log_sigmas,
+                metadata=np.array(json.dumps(metadata), dtype=np.str_),
+            )
+
+        @classmethod
+        def load(cls, path: str | Path) -> "Agent":
+            path = Path(path)
+
+            with np.load(path, allow_pickle=False) as data:
+                metadata = json.loads(str(data["metadata"]))
+
+                agent = cls(
+                    params=data["params"].copy(),
+                    stats=data["stats"].copy(),
+                    moves=data["moves"].copy(),
+                    types=tuple(int(x) for x in metadata["types"]),
+                    log_sigmas=data["log_sigmas"].copy(),
+                    fitness=metadata["fitness"],
+                    eval_info=metadata.get("eval_info", {}),
+                )
+
+            return agent
 
     return (Agent,)
 
@@ -2088,7 +2134,7 @@ def _():
 
 
 @app.cell
-def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN, rng):
+def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN):
     def validate_stats(stats: sdw.Stats) -> bool:
         all_below_max = all(value <= STAT_MAX[key] for key, value in stats.items())
         sum_below_max = sum(stats.values()) == STATS_TOTAL_MAX
@@ -2191,22 +2237,22 @@ def _(STATS_TOTAL_MAX, STAT_KEYS, STAT_MAX, STAT_MIN, rng):
 
         return {key: int(value) for key, value in zip(STAT_KEYS, values)}
 
-    def random_valid_stats() -> np.ndarray:
+    def random_valid_stats(rng) -> np.ndarray:
         return rng.random(len(STAT_KEYS))
 
-    return (random_valid_stats,)
+    return genome_stats_to_integer, random_valid_stats
 
 
 @app.function
-def xavier_uniform(fan_in, fan_out):
+def xavier_uniform(fan_in, fan_out, rng):
     # Best for tanh
     limit = np.sqrt(6 / (fan_in + fan_out))
-    return np.random.uniform(-limit, limit, (fan_in, fan_out))
+    return rng.uniform(-limit, limit, (fan_in, fan_out))
 
 
 @app.cell
-def _(metadata_cols, move_embeddings_df, rng):
-    def pick_random_moveset():
+def _(metadata_cols, move_embeddings_df):
+    def pick_random_moveset(rng):
         k = 4
         feature_cols = [c for c in move_embeddings_df.columns if c not in metadata_cols]
 
@@ -2237,29 +2283,28 @@ def _(
     MLP_LAYOUT,
     pick_random_moveset,
     random_valid_stats,
-    rng,
     types_unique,
 ):
-    def init_agent_at_random() -> Agent:
+    def init_agent_at_random(rng) -> Agent:
         params_parts = []
         for i, input_size in enumerate(MLP_LAYOUT[:-1]):
             output_size = MLP_LAYOUT[i + 1]
 
-            W = xavier_uniform(input_size, output_size).flatten()
+            W = xavier_uniform(input_size, output_size, rng).flatten()
             b = np.zeros(output_size)
 
             params_parts.extend([W, b])
 
         params = np.concatenate(params_parts)
 
-        stats = random_valid_stats()
+        stats = random_valid_stats(rng)
 
         types = (
             rng.integers(len(types_unique), dtype=int),
             rng.integers(len(types_unique), dtype=int),
         )
 
-        moves = pick_random_moveset()
+        moves = pick_random_moveset(rng)
 
         log_sigmas = np.log(
             np.ones((len(MLP_LAYOUT) - 1) * 2) * 0.05
@@ -2268,6 +2313,14 @@ def _(
         return Agent(params, stats, moves, types, log_sigmas)
 
     return (init_agent_at_random,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Offspring
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -2408,23 +2461,23 @@ def _(
 ):
     def mutate_all(agent: Agent):
         if np.random.random() < 0.40:
-            mutate_moveset(agent)
+            agent = mutate_moveset(agent)
 
         if np.random.random() < 0.10:
-            mutate_type(agent)
+            agent = mutate_type(agent)
 
         if np.random.random() < 0.70:
-            mutate_stats(agent)
+            agent = mutate_stats(agent)
 
         if np.random.random() < 0.8:
-            mutate_sigma(agent)
+            agent = mutate_sigma(agent)
 
         if np.random.random() < 0.95:
-            mutate_params(agent)
+            agent = mutate_params(agent)
 
         return agent
 
-    return
+    return (mutate_all,)
 
 
 @app.cell(hide_code=True)
@@ -2473,7 +2526,229 @@ def _(Agent, rng):
 
         return a, b
 
+    return (mate,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Make Offspring
+    """)
     return
+
+
+@app.cell
+def _(Agent, mate, mutate_all):
+    def make_offspring(
+        n_offspring: int,
+        population: list[Agent],
+        rng,
+        crossover_p: float,
+        mut_p: float,
+    ) -> list[Agent]:
+        offspring = []
+
+        while len(offspring) < n_offspring:
+            parent_ids = rng.choice(len(population), size=2, replace=False)
+            p1 = population[parent_ids[0]].copy(deep=False)
+            p2 = population[parent_ids[1]].copy(deep=False)
+
+            if rng.random() < crossover_p:
+                children = mate(p1, p2)
+                if rng.random() < 0.5:
+                    mutate_all(children[0])
+                if rng.random() < 0.5:
+                    mutate_all(children[1])
+
+                offspring.extend(children)
+
+                continue
+
+            offspring.append(mutate_all(p1))
+            offspring.append(mutate_all(p2))
+
+        return offspring
+
+    return (make_offspring,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Sampling adversaries
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Opponent Battle Policies
+    """)
+    return
+
+
+@app.function
+def random_opponent_policy(p0: sdw.PlayerState, p1: sdw.PlayerState, rng):
+    return rng.integers(4)
+
+
+@app.cell
+def _(map_type_to_score, moves_df):
+    def heuristic_opponent_policy(p0: sdw.PlayerState, p1: sdw.PlayerState, rng):
+        moves = [
+            moves_df.loc[moves_df["move_identifier"] == slot.id].iloc[0]
+            for slot in p1.slots
+        ]
+
+        power_estimate = [
+            move["power"]
+            * np.exp(
+                map_type_to_score(
+                    p1.pokemon["types"],
+                    p0.pokemon["types"],
+                    move["type"],
+                )
+            )
+            for move in moves
+        ]
+
+        return np.argmax(power_estimate)
+
+    return (heuristic_opponent_policy,)
+
+
+@app.cell
+def _(compute_input_to_mlp, mlp_forward):
+    def mlp_opponent_policy_factory(params: np.ndarray):
+        def policy(p0: sdw.PlayerState, p1: sdw.PlayerState, rng):
+            return mlp_forward(compute_input_to_mlp(p1, p0), params)
+
+        return policy
+
+    return (mlp_opponent_policy_factory,)
+
+
+@app.cell
+def _():
+    opponent_policies = {
+        OpponentAIType.RANDOM: 0.5,
+        OpponentAIType.HEURISTIC: 1.0,
+        OpponentAIType.RANDOM_MLP: 1.5,
+        OpponentAIType.CHAMPION_MLP: 1.75,
+    }
+    return (opponent_policies,)
+
+
+@app.cell
+def _():
+    selected_opponents_pool = []
+    return (selected_opponents_pool,)
+
+
+@app.cell
+def _():
+    OpponentConfig = tuple[sdw.OpponentConfig, Callable, float]
+    return (OpponentConfig,)
+
+
+@app.cell
+def _(
+    Agent,
+    OpponentConfig,
+    heuristic_opponent_policy,
+    mlp_opponent_policy_factory,
+    opponent_policies,
+    selected_opponents_pool,
+):
+    def sample_adversaries(
+        n: int, rng, best_agent: Agent, population: list[Agent]
+    ) -> list[OpponentConfig]:
+        opponent_configs = []
+
+        for _ in range(n):
+            policy = rng.choice(
+                np.array(opponent_policies.keys()),
+                p=np.array([0.3, 0.3, 0.3, 0.1]),
+            )
+
+            opponent: sdw.OpponentConfig
+            if rng.random() < 0.2:
+                opponent = {"type": "random"}
+            else:
+                opponent = {
+                    "type": "specified",
+                    **selected_opponents_pool[
+                        int(rng.integers(len(selected_opponents_pool)))
+                    ],
+                }
+
+            match policy:
+                case OpponentAIType.RANDOM:
+                    policy_fn = random_opponent_policy
+                case OpponentAIType.HEURISTIC:
+                    policy_fn = heuristic_opponent_policy
+                case OpponentAIType.RANDOM_MLP:
+                    policy_fn = mlp_opponent_policy_factory(
+                        population[int(rng.integers(len(population)))].params
+                    )
+                case OpponentAIType.CHAMPION_MLP:
+                    policy_fn = mlp_opponent_policy_factory(best_agent.params)
+
+            opponent_configs.append(opponent, policy_fn, opponent_policies[policy])
+
+        return opponent_configs
+
+    return (sample_adversaries,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Fitness
+
+    The fitness will be computed using this formula
+    $$
+    \begin{align*}
+    \text{fitness for 1 battle} = &\, \text{difficulty multiplier} \cdot \mathbb I(\text{battle won}) \\
+    & + 0.25 \cdot \text{own remaining HP fraction} \\
+    & - 0.25 \cdot \text{opponent remaining HP fraction} \\
+    & - 0.05  \cdot \text{number of turns}
+    \end{align*}
+    $$
+    where $\mathbb I$ is the indicator function.
+
+    The model will battle against various opponents with various degrees of difficulty.
+    The total fitness will be the sum of the fitness scores of each battle.
+    """)
+    return
+
+
+@app.function
+def compute_fitnesses(
+    battle_results: list[sdw.BattleResult], n_adversaries: int
+) -> list[float]:
+    n_agents = len(battle_results) / n_adversaries
+
+    fitnesses = [0 for _ in range(n_agents)]
+    for agent in range(n_agents):
+        for adversary in range(n_adversaries):
+            battle = battle_results[agent * n_adversaries + adversary]
+            difficulty_multiplier = battle.userdata
+
+            fitnesses[agent] += (
+                (difficulty_multiplier if battle.winner == 0 else 0)
+                + (
+                    0.25
+                    * (
+                        battle.player_hp / battle.player0.pokemon["stats"]["hp"]
+                        - battle.opponent_hp / battle.player1.pokemon["stats"]["hp"]
+                    )
+                )
+                - 0.05 * battle.turns
+            ) / n_adversaries
+
+    return fitnesses
 
 
 @app.cell(hide_code=True)
@@ -2485,100 +2760,180 @@ def _():
 
 
 @app.cell
-def _(Agent, init_agent_at_random):
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-    creator.create("Individual", Agent, fitness=creator.FitnessMax)
+def _(Agent, a):
+    def save_state(path: Path, population: list[Agent], rng, metadata):
+        for i, agent in enumerate(population):
+            a.save(path / f"agent_{i:04d}.npz")
+        with open(path / "metadata.json", "w") as f:
+            f.write(json.dumps(metadata))
 
-    toolbox = base.Toolbox()
-
-    toolbox.register("individual", init_agent_at_random)
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    return
-
-
-@app.cell
-def _():
-    return
+    return (save_state,)
 
 
 @app.cell
-def _(seed):
-    def first_move_ai(p0: sdw.PlayerState, p1: sdw.PlayerState) -> tuple[int, int]:
-        print(p0)
+def _(Agent):
+    def select_survivors(
+        candidates: list[Agent], mu: int, tournament_size: int, rng
+    ) -> list[Agent]:
+        pass
 
-        return (0, 0)
-
-    ai = {
-        "species": "Pikachu",
-        "types": ["Electric"],
-        "stats": {
-            "hp": 250,
-            "atk": 150,
-            "def": 100,
-            "spa": 120,
-            "spd": 100,
-            "spe": 180,
-        },
-        "moves": ["thunderbolt", "irontail", "quickattack", "thunderwave"],
-    }
-
-    configs = [
-        sdw.BattleConfig(
-            ai=ai,
-            opponent={"type": "hardcoded", "species": "Garchomp"},
-            move_selector=first_move_ai,
-            seed=seed,
-        ),
-        sdw.BattleConfig(
-            ai=ai,
-            opponent={"type": "hardcoded"},
-            move_selector=first_move_ai,
-            seed=seed,
-        ),
-        sdw.BattleConfig(
-            ai=ai,
-            opponent={"type": "random"},
-            move_selector=first_move_ai,
-            seed=seed,
-        ),
-        sdw.BattleConfig(
-            ai=ai,
-            opponent={"type": "random"},
-            move_selector=first_move_ai,
-            seed=seed,
-        ),
-    ]
-
-    with sdw.ShowdownPool(max_size=1) as pool:
-        results = pool.run_battles(configs)
-
-    for i, r in enumerate(results):
-        print(
-            f"Battle {i}: {r.winner} won in {r.turns} turns "
-            f"(p0 HP: {r.player_hp}, p1 HP: {r.opponent_hp})"
-        )
-    return
+    return (select_survivors,)
 
 
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    ## Fitness
+@app.cell
+def _(Agent, OpponentConfig, genome_stats_to_integer, moves_df, types_unique):
+    def get_battle_config(
+        population: list[Agent], opponents: list[OpponentConfig], rng
+    ):
+        battle_configs = []
 
-    The fitness will be computed using this formula
-    $$
-    \begin{align*}
-    \text{fitness for 1 battle} = &\, 3000 \cdot \mathbb I(\text{battle won}) \\
-    & + 100 \cdot \text{own remaining HP} \\
-    & - 100 \cdot \text{opponent remaining HP} \\
-    & - 50  \cdot \text{number of turns}
-    \end{align*}
-    $$
-    where $\mathbb I$ is the indicator function.
+        for agent in population:
+            types_str = [types_unique[i] for i in set(agent.types)]
+            move_ids = [moves_df.iloc[i, "move_identifier"] for i in agent.moves]
+            ai = {
+                "species": "Evolvemon",
+                "types": types_str,
+                "stats": genome_stats_to_integer(agent.stats),
+                "moves": move_ids,
+            }
 
-    The model will battle against various opponents with various degrees of difficulty.
-    The total fitness will be the sum of the fitness scores of each battle.
-    """)
+            for opponent in opponents:
+                battle_configs.append(
+                    sdw.BattleConfig(
+                        ai,
+                        opponent[0],
+                        seed=rng.integers(),
+                        move_selector=opponent[1],
+                        userdata=opponent[2],
+                    )
+                )
+
+    return (get_battle_config,)
+
+
+@app.cell
+def _(Agent, get_battle_config, n_adversaries, showdown_worker_pool):
+    def evaluate_population(population: list[Agent], adversaries):
+        battle_configs = get_battle_config(population, adversaries)
+        battle_results = showdown_worker_pool.run_battles(battle_configs)
+        fitnesses, eval_infos = compute_fitnesses(battle_results, n_adversaries)
+
+        for agent, fitness, eval_info in zip(population, fitnesses, eval_infos):
+            agent.fitness = fitness
+            agent.eval_info = eval_info
+
+    return (evaluate_population,)
+
+
+@app.cell
+def _(
+    Agent,
+    checkpoint_path,
+    evaluate_population,
+    init_agent_at_random,
+    make_offspring,
+    n_evaluated,
+    sample_adversaries,
+    save_state,
+    seed,
+    select_survivors,
+):
+    def run(
+        showdown_worker_pool: sdw.ShowdownPool,
+        *,
+        mu: int = 30,
+        lambda_: int = 60,
+        max_gens: int = 500,
+        crossover_p: float = 0.25,
+        mut_p: float = 0.9,
+        tournament_size=3,
+        n_adversaries=12,
+        checkpoints_path: str | Path = "checkpoints",
+        checkpoint_every: int = 5,
+    ):
+        rng = np.random.default_rng(seed)
+
+        checkpoints_path = Path(checkpoint_path)
+
+        id = 0
+        for path in checkpoints_path.iterdir():
+            if not path.is_dir():
+                continue
+
+            try:
+                id = max(id, int(path))
+            except ValueError:
+                continue
+
+        checkpoints_path /= f"{id:04d}"
+
+        logbook = {}
+
+        population = [init_agent_at_random(rng) for _ in range(mu)]
+
+        best_agents_per_gen: list[Agent] = []
+        best_agent: Agent | None = None
+
+        tqdm_bar = tqdm(range(max_gens), unit="gen")
+        for gen in tqdm_bar:
+            adversaries = sample_adversaries(n_adversaries, rng)
+            evaluate_population(population, adversaries)
+
+            generation_best = max(population, key=lambda a: a.fitness)
+            generation_mean = float(np.mean([a.fitness for a in population]))
+            generation_std = float(np.std([a.fitness for a in population]))
+            generation_min = float(np.min([a.fitness for a in population]))
+            generation_max = float(np.max([a.fitness for a in population]))
+
+            best_agents_per_gen.append(generation_best.copy())
+            if best_agent is None or generation_best.fitness > best_agent.fitness:
+                best_agent = generation_best.copy()
+
+            record = {
+                "generation": gen,
+                "n_evaluated": n_evaluated,
+                "min": generation_min,
+                "mean": generation_mean,
+                "std": generation_std,
+                "max": generation_max,
+                "best_so_far": best_agent.fitness,
+            }
+
+            tqdm_bar.set_postfix(
+                {
+                    "min": generation_min,
+                    "mean": generation_mean,
+                    "std": generation_std,
+                    "max": generation_max,
+                    "gen_best": generation_best.fitness,
+                }
+            )
+
+            logbook.append(record)
+
+            this_gen_checkpoints = checkpoints_path / f"gen_{gen:04d}"
+            this_gen_checkpoints.mkdir(parents=True, exist_ok=True)
+
+            generation_best.save(this_gen_checkpoints / "generation_best.npz")
+
+            if gen % checkpoint_every == 0:
+                save_state(
+                    this_gen_checkpoints,
+                    population,
+                    rng,
+                    {"logbook": logbook, "best_agent_fitness": best_agent.fitness},
+                )
+
+            offspring = make_offspring(lambda_, population, rng, crossover_p, mut_p)
+
+            evaluate_population(offspring, adversaries)
+
+            population = select_survivors(
+                population + offspring, mu, tournament_size, rng
+            )
+
+        return best_agent, best_agents_per_gen, logbook
+
     return
 
 
