@@ -7,7 +7,6 @@ from typing import Iterable
 import pandas as pd
 
 from ..io import DatasetLoader
-from .deprecated_moves import infer_deprecated_moves
 
 SHOWDOWN_IDENTIFIER_MAP: dict[str, str] = {
     "vice-grip": "visegrip",
